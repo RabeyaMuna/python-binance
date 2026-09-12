@@ -1,20 +1,29 @@
-from typing import Dict, Optional
 import asyncio
+from typing import Dict, Optional
 
 from websockets import WebSocketClientProtocol  # type: ignore
 
+from binance.exceptions import BinanceAPIException, BinanceWebsocketUnableToConnect
+
 from .constants import WSListenerState
 from .reconnecting_websocket import ReconnectingWebsocket
-from binance.exceptions import BinanceAPIException, BinanceWebsocketUnableToConnect
 
 
 class WebsocketAPI(ReconnectingWebsocket):
-    def __init__(self, url: str, tld: str = "com", testnet: bool = False, https_proxy: Optional[str] = None):
+    def __init__(
+        self,
+        url: str,
+        tld: str = "com",
+        testnet: bool = False,
+        https_proxy: Optional[str] = None,
+    ):
         self._tld = tld
         self._testnet = testnet
         self._responses: Dict[str, asyncio.Future] = {}
         self._connection_lock: Optional[asyncio.Lock] = None
-        super().__init__(url=url, prefix="", path="", is_binary=False, https_proxy=https_proxy)
+        super().__init__(
+            url=url, prefix="", path="", is_binary=False, https_proxy=https_proxy
+        )
 
     @property
     def connection_lock(self) -> asyncio.Lock:
@@ -35,7 +44,9 @@ class WebsocketAPI(ReconnectingWebsocket):
         if "status" in parsed_msg:
             if parsed_msg["status"] != 200:
                 exception = BinanceAPIException(
-                    parsed_msg, parsed_msg["status"], self.json_dumps(parsed_msg["error"])
+                    parsed_msg,
+                    parsed_msg["status"],
+                    self.json_dumps(parsed_msg["error"]),
                 )
         if req_id is not None and req_id in self._responses:
             if exception is not None:
@@ -120,8 +131,8 @@ class WebsocketAPI(ReconnectingWebsocket):
 
         except asyncio.TimeoutError:
             raise BinanceWebsocketUnableToConnect("Request timed out")
-        except Exception as e:
-            raise e
+        except Exception:
+            raise
         finally:
             self._responses.pop(id, None)
 

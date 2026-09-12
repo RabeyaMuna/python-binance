@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # coding=utf-8
 
-from binance.client import Client
 import pytest
 import requests_mock
+
+from binance.client import Client
 
 client = Client("api_key", "api_secret", ping=False)
 

@@ -1,23 +1,22 @@
+#!/usr/bin/env python3
+import time
 from pathlib import Path
-from typing import Dict, Optional, List, Union, Any
+from typing import Any, Dict, List, Optional, Union
+from urllib.parse import quote, urlencode
 
 import requests
-import time
-from urllib.parse import urlencode, quote
 
 from .base_client import BaseClient
-
-from .helpers import (
-    convert_list_to_json_array,
-    interval_to_milliseconds,
-    convert_ts_str,
-)
+from .enums import HistoricalKlinesType
 from .exceptions import (
     BinanceAPIException,
     BinanceRequestException,
-    NotImplementedException,
 )
-from .enums import HistoricalKlinesType
+from .helpers import (
+    convert_list_to_json_array,
+    convert_ts_str,
+    interval_to_milliseconds,
+)
 
 
 class Client(BaseClient):
@@ -79,15 +78,32 @@ class Client(BaseClient):
         if data is not None:
             del kwargs["data"]
 
-        if signed and self.PRIVATE_KEY and data: # handle issues with signing using eddsa/rsa and POST requests
-            dict_data = Client.convert_to_dict(data)
-            signature = dict_data["signature"] if "signature" in dict_data else  None
-            if signature:
-                del dict_data["signature"]
-            url_encoded_data = urlencode(dict_data)
-            data = f"{url_encoded_data}&signature={signature}"
+        if (
+            signed and self.PRIVATE_KEY and data
+        ):  # handle issues with signing using eddsa/rsa and POST requests
+            # Safely convert to a dict-like structure without mutating the original
+            try:
+                dict_data = Client.convert_to_dict(data)
+            except Exception:
+                # Fallback: try to coerce into a dict if possible
+                dict_data = dict(data) if isinstance(data, dict) else {}
 
-        self.response = getattr(self.session, method)(uri, headers=headers, data=data, **kwargs)
+            # Work on a shallow copy to avoid mutating caller data
+            dict_data = dict(dict_data)
+
+            # Extract and remove signature if present
+            signature = dict_data.pop("signature", None)
+
+            # URL-encode the parameters portion
+            url_encoded_data = urlencode(dict_data)
+            if signature:
+                data = f"{url_encoded_data}&signature={signature}"
+            else:
+                data = url_encoded_data
+
+        self.response = getattr(self.session, method)(
+            uri, headers=headers, data=data, **kwargs
+        )
         return self._handle_response(self.response)
 
     @staticmethod
@@ -396,7 +412,9 @@ class Client(BaseClient):
 
         """
         response = self._get("ticker/price")
-        if isinstance(response, list) and all(isinstance(item, dict) for item in response):
+        if isinstance(response, list) and all(
+            isinstance(item, dict) for item in response
+        ):
             return response
         raise TypeError("Expected a list of dictionaries")
 
@@ -439,9 +457,7 @@ class Client(BaseClient):
             data["symbol"] = params["symbol"]
         elif "symbols" in params:
             data["symbols"] = params["symbols"]
-        return self._get(
-            "ticker/bookTicker", data=data
-        )
+        return self._get("ticker/bookTicker", data=data)
 
     def get_order_book(self, **params) -> Dict:
         """Get the Order Book for the market
@@ -540,9 +556,7 @@ class Client(BaseClient):
         :raises: BinanceRequestException, BinanceAPIException
 
         """
-        return self._get(
-            "historicalTrades", data=params
-        )
+        return self._get("historicalTrades", data=params)
 
     def get_aggregate_trades(self, **params) -> Dict:
         """Get compressed, aggregate trades. Trades that fill at the time,
@@ -647,6 +661,8 @@ class Client(BaseClient):
                     start_ts = end_ts
             for t in trades:
                 yield t
+            if not trades:
+                return
             last_id = trades[-1][self.AGG_ID]
 
         while True:
@@ -790,7 +806,7 @@ class Client(BaseClient):
         elif HistoricalKlinesType.FUTURES_COIN_INDEX_PRICE == klines_type:
             return self.futures_coin_index_price_klines(**params)
         else:
-            raise NotImplementedException(klines_type)
+            raise NotImplementedError(klines_type)
 
     def _get_earliest_valid_timestamp(
         self,
@@ -1050,10 +1066,8 @@ class Client(BaseClient):
 
         """
 
-        initial_limit_set = True
         if limit is None:
             limit = 1000
-            initial_limit_set = False
 
         # convert interval to useful value in seconds
         timeframe = interval_to_milliseconds(interval)
@@ -1154,7 +1168,7 @@ class Client(BaseClient):
                 "volume": "8913.30000000",
                 "openTime": 1499783499040,
                 "closeTime": 1499869899040,
-                "fristId": 28385,   # First tradeId
+                "firstId": 28385,   # First tradeId
                 "lastId": 28460,    # Last tradeId
                 "count": 76         # Trade count
             }
@@ -1178,7 +1192,7 @@ class Client(BaseClient):
                     "volume": "8913.30000000",
                     "openTime": 1499783499040,
                     "closeTime": 1499869899040,
-                    "fristId": 28385,   # First tradeId
+                    "firstId": 28385,   # First tradeId
                     "lastId": 28460,    # Last tradeId
                     "count": 76         # Trade count
                 }
@@ -1307,9 +1321,7 @@ class Client(BaseClient):
         :raises: BinanceRequestException, BinanceAPIException
 
         """
-        return self._get(
-            "ticker/bookTicker", data=params
-        )
+        return self._get("ticker/bookTicker", data=params)
 
     # Account Endpoints
 
@@ -1353,7 +1365,7 @@ class Client(BaseClient):
             {
                 "symbol":"LTCBTC",
                 "orderId": 1,
-                "clientOrderId": "myOrder1" # Will be newClientOrderId
+                "clientOrderId": "myOrder1", # Will be newClientOrderId
                 "transactTime": 1499827319559
             }
 
@@ -2454,7 +2466,6 @@ class Client(BaseClient):
         https://binance-docs.github.io/apidocs/spot/en/#account-status-sapi-user_data
         https://developers.binance.com/docs/wallet/account/account-status
         :param version: the api version
-        :param version: int
         :param recvWindow: the number of milliseconds the request is valid for
         :type recvWindow: int
 
@@ -2655,7 +2666,7 @@ class Client(BaseClient):
                         "userAssetDribbletDetails": [
                             {
                                 "transId": 4357015,
-                                "serviceChargeAmount": "0.00001"
+                                "serviceChargeAmount": "0.00001",
                                 "amount": "0.001",
                                 "operateTime": 1616203180000,
                                 "transferedAmount": "0.00049",
@@ -2663,7 +2674,7 @@ class Client(BaseClient):
                             },
                             {
                                 "transId": 4357015,
-                                "serviceChargeAmount": "0.000002"
+                                "serviceChargeAmount": "0.000002",
                                 "amount": "0.0001",
                                 "operateTime": 1616203180000,
                                 "transferedAmount": "0.00009795",
@@ -3210,9 +3221,7 @@ class Client(BaseClient):
         :raises: BinanceRequestException, BinanceAPIException
 
         """
-        res = self._post(
-            "userDataStream", False, data={}
-        )
+        res = self._post("userDataStream", False, data={})
         return res["listenKey"]
 
     def stream_keepalive(self, listenKey):
@@ -3233,9 +3242,7 @@ class Client(BaseClient):
 
         """
         params = {"listenKey": listenKey}
-        return self._put(
-            "userDataStream", False, data=params
-        )
+        return self._put("userDataStream", False, data=params)
 
     def stream_close(self, listenKey):
         """Close out a user data stream.
@@ -4387,7 +4394,7 @@ class Client(BaseClient):
             "post", "margin/isolated/transfer", signed=True, data=params
         )
 
-    def get_isolated_margin_tranfer_history(self, **params):
+    def get_isolated_margin_transfer_history(self, **params):
         """Get transfers to isolated margin account.
 
         https://binance-docs.github.io/apidocs/spot/en/#get-isolated-margin-transfer-history-user_data
@@ -7375,7 +7382,7 @@ class Client(BaseClient):
         return self._request_futures_api("get", "continuousKlines", data=params)
 
     def futures_historical_klines(
-        self, symbol: str, interval :str, start_str, end_str=None, limit=None
+        self, symbol: str, interval: str, start_str, end_str=None, limit=None
     ):
         """Get historical futures klines from Binance
 
@@ -7504,18 +7511,14 @@ class Client(BaseClient):
 
         https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Taker-BuySell-Volume
         """
-        return self._request_futures_data_api(
-            "get", "takerlongshortRatio", data=params
-        )
+        return self._request_futures_data_api("get", "takerlongshortRatio", data=params)
 
     def futures_basis(self, **params):
         """Get future basis of a specific symbol
 
         https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Basis
         """
-        return self._request_futures_data_api(
-            "get", "basis", data=params
-        )
+        return self._request_futures_data_api("get", "basis", data=params)
 
     def futures_ticker(self, **params):
         """24 hour rolling window price change statistics.
@@ -7802,7 +7805,6 @@ class Client(BaseClient):
             params["newClientOrderId"] = self.CONTRACT_ORDER_PREFIX + self.uuid22()
         params["type"] = "MARKET"
         return self._request_futures_api("post", "order", True, data=params)
-
 
     def futures_limit_buy_order(self, **params):
         """Send in a new futures limit buy order.
@@ -8112,7 +8114,7 @@ class Client(BaseClient):
     def futures_coin_ping(self):
         """Test connectivity to the Rest API
 
-       https://developers.binance.com/docs/derivatives/coin-margined-futures/market-data/rest-api
+        https://developers.binance.com/docs/derivatives/coin-margined-futures/market-data/rest-api
 
         """
         return self._request_futures_coin_api("get", "ping")
@@ -8251,28 +8253,36 @@ class Client(BaseClient):
 
         https://developers.binance.com/docs/derivatives/coin-margined-futures/market-data/rest-api/Top-Trader-Long-Short-Ratio
         """
-        return self._request_futures_coin_data_api("get", "topLongShortPositionRatio", data=params)
+        return self._request_futures_coin_data_api(
+            "get", "topLongShortPositionRatio", data=params
+        )
 
     def futures_coin_top_longshort_account_ratio(self, **params):
         """Get present long to short ratio for top positions of a specific symbol.
 
         https://developers.binance.com/docs/derivatives/coin-margined-futures/market-data/rest-api/Top-Long-Short-Account-Ratio
         """
-        return self._request_futures_coin_data_api("get", "topLongShortAccountRatio", data=params)
+        return self._request_futures_coin_data_api(
+            "get", "topLongShortAccountRatio", data=params
+        )
 
     def futures_coin_global_longshort_ratio(self, **params):
         """Get present long to short ratio for top positions of a specific symbol.
 
         https://developers.binance.com/docs/derivatives/coin-margined-futures/market-data/rest-api/Long-Short-Ratio
         """
-        return self._request_futures_coin_data_api("get", "globalLongShortAccountRatio", data=params)
+        return self._request_futures_coin_data_api(
+            "get", "globalLongShortAccountRatio", data=params
+        )
 
     def futures_coin_taker_buy_sell_volume(self, **params):
         """Get present long to short ratio for top positions of a specific symbol.
 
         https://developers.binance.com/docs/derivatives/coin-margined-futures/market-data/rest-api/Taker-Buy-Sell-Volume
         """
-        return self._request_futures_coin_data_api("get", "takerBuySellVol", data=params)
+        return self._request_futures_coin_data_api(
+            "get", "takerBuySellVol", data=params
+        )
 
     def futures_coin_basis(self, **params):
         """Get future basis of a specific symbol
@@ -8336,7 +8346,7 @@ class Client(BaseClient):
         return self._request_margin_api("get", "asset/transfer", True, data=params)
 
     def funding_wallet(self, **params):
-        """ Query Funding Wallet
+        """Query Funding Wallet
 
         https://developers.binance.com/docs/wallet/asset/funding-wallet
 
@@ -8346,7 +8356,7 @@ class Client(BaseClient):
         )
 
     def get_user_asset(self, **params):
-        """ Get user assets, just for positive data
+        """Get user assets, just for positive data
 
         https://developers.binance.com/docs/wallet/asset/user-assets
 
@@ -9201,7 +9211,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_options_api("get", "exerciseRecord", signed=True, data=params)
+        return self._request_options_api(
+            "get", "exerciseRecord", signed=True, data=params
+        )
 
     def options_bill(self, **params):
         """Account funding flow (USER_DATA)
@@ -9907,7 +9919,9 @@ class Client(BaseClient):
         :returns: API response
 
         """
-        return self._request_papi_api("get", "rateLimit/order", signed=True, data=params)
+        return self._request_papi_api(
+            "get", "rateLimit/order", signed=True, data=params
+        )
 
     def papi_stream_get_listen_key(self):
         """Start a new user data stream for Portfolio Margin account.
@@ -10354,7 +10368,6 @@ class Client(BaseClient):
             "get", "portfolio/interest-history", signed=True, data=params
         )
 
-
     def papi_get_portfolio_negative_balance_exchange_record(self, **params):
         """Query user negative balance auto exchange record.
 
@@ -10367,7 +10380,10 @@ class Client(BaseClient):
 
         """
         return self._request_papi_api(
-            "get", "portfolio/negative-balance-exchange-record", signed=True, data=params
+            "get",
+            "portfolio/negative-balance-exchange-record",
+            signed=True,
+            data=params,
         )
 
     def papi_fund_auto_collection(self, **params):
@@ -14085,7 +14101,9 @@ class Client(BaseClient):
             - Only VIP users can query this endpoint
             - Weight: 200
         """
-        return self._request_margin_api("get", "futures/data/histDataLink", signed=True, data=params)
+        return self._request_margin_api(
+            "get", "futures/data/histDataLink", signed=True, data=params
+        )
 
     def margin_v1_get_loan_vip_ongoing_orders(self, **params):
         """
@@ -14099,7 +14117,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/vip/ongoing/orders", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/vip/ongoing/orders", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_mining_payment_other(self, **params):
         """
@@ -14113,7 +14133,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "mining/payment/other", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "mining/payment/other", signed=True, data=params, version=1
+        )
 
     def futures_coin_v1_get_income_asyn_id(self, **params):
         """
@@ -14127,7 +14149,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_coin_api("get", "income/asyn/id", signed=True, data=params, version=1)
+        return self._request_futures_coin_api(
+            "get", "income/asyn/id", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_simple_earn_flexible_history_subscription_record(self, **params):
         """
@@ -14141,7 +14165,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "simple-earn/flexible/history/subscriptionRecord", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "simple-earn/flexible/history/subscriptionRecord",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_lending_auto_invest_one_off(self, **params):
         """
@@ -14153,7 +14183,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "lending/auto-invest/one-off", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "lending/auto-invest/one-off", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_broker_sub_account_api_commission_coin_futures(self, **params):
         """
@@ -14167,7 +14199,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccountApi/commission/coinFutures", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "broker/subAccountApi/commission/coinFutures",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def v3_post_order_list_otoco(self, **params):
         """
@@ -14179,7 +14217,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_api("post", "orderList/otoco", signed=True, data=params, version="v3")
+        return self._request_api(
+            "post", "orderList/otoco", signed=True, data=params, version="v3"
+        )
 
     def futures_v1_get_order_asyn(self, **params):
         """
@@ -14193,7 +14233,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "order/asyn", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "order/asyn", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_asset_custody_transfer_history(self, **params):
         """
@@ -14207,7 +14249,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "asset/custody/transfer-history", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "asset/custody/transfer-history", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_broker_sub_account_blvt(self, **params):
         """
@@ -14219,7 +14263,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccount/blvt", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "broker/subAccount/blvt", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_sol_staking_sol_redeem(self, **params):
         """
@@ -14233,7 +14279,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "sol-staking/sol/redeem", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "sol-staking/sol/redeem", signed=True, data=params, version=1
+        )
 
     def options_v1_get_countdown_cancel_all(self, **params):
         """
@@ -14247,7 +14295,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_options_api("get", "countdownCancelAll", signed=True, data=params)
+        return self._request_options_api(
+            "get", "countdownCancelAll", signed=True, data=params
+        )
 
     def margin_v1_get_margin_trade_coeff(self, **params):
         """
@@ -14261,7 +14311,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "margin/tradeCoeff", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "margin/tradeCoeff", signed=True, data=params, version=1
+        )
 
     def futures_coin_v1_get_order_amendment(self, **params):
         """
@@ -14275,7 +14327,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_coin_api("get", "orderAmendment", signed=True, data=params, version=1)
+        return self._request_futures_coin_api(
+            "get", "orderAmendment", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_margin_available_inventory(self, **params):
         """
@@ -14289,7 +14343,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "margin/available-inventory", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "margin/available-inventory", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_account_api_restrictions_ip_restriction_ip_list(self, **params):
         """
@@ -14301,7 +14357,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "account/apiRestrictions/ipRestriction/ipList", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "account/apiRestrictions/ipRestriction/ipList",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v2_get_eth_staking_account(self, **params):
         """
@@ -14315,7 +14377,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "eth-staking/account", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get", "eth-staking/account", signed=True, data=params, version=2
+        )
 
     def margin_v1_get_loan_income(self, **params):
         """
@@ -14329,7 +14393,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/income", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/income", signed=True, data=params, version=1
+        )
 
     def futures_coin_v1_get_pm_account_info(self, **params):
         """
@@ -14343,7 +14409,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_coin_api("get", "pmAccountInfo", signed=True, data=params, version=1)
+        return self._request_futures_coin_api(
+            "get", "pmAccountInfo", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_managed_subaccount_query_trans_log_for_investor(self, **params):
         """
@@ -14357,7 +14425,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "managed-subaccount/queryTransLogForInvestor", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "managed-subaccount/queryTransLogForInvestor",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_dci_product_auto_compound_edit_status(self, **params):
         """
@@ -14371,7 +14445,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "dci/product/auto_compound/edit-status", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "dci/product/auto_compound/edit-status",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def futures_v1_get_trade_asyn(self, **params):
         """
@@ -14385,7 +14465,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "trade/asyn", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "trade/asyn", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_loan_vip_request_interest_rate(self, **params):
         """
@@ -14399,7 +14481,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/vip/request/interestRate", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/vip/request/interestRate", signed=True, data=params, version=1
+        )
 
     def futures_v1_get_funding_info(self, **params):
         """
@@ -14413,7 +14497,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "fundingInfo", signed=False, data=params, version=1)
+        return self._request_futures_api(
+            "get", "fundingInfo", signed=False, data=params, version=1
+        )
 
     def margin_v2_get_loan_flexible_repay_rate(self, **params):
         """
@@ -14427,7 +14513,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/flexible/repay/rate", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get", "loan/flexible/repay/rate", signed=True, data=params, version=2
+        )
 
     def margin_v1_get_lending_auto_invest_plan_id(self, **params):
         """
@@ -14439,7 +14527,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/plan/id", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "lending/auto-invest/plan/id", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_loan_adjust_ltv(self, **params):
         """
@@ -14451,7 +14541,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "loan/adjust/ltv", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "loan/adjust/ltv", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_mining_statistics_user_status(self, **params):
         """
@@ -14465,7 +14557,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "mining/statistics/user/status", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "mining/statistics/user/status", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_broker_transfer_futures(self, **params):
         """
@@ -14479,7 +14573,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/transfer/futures", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "broker/transfer/futures", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_algo_spot_new_order_twap(self, **params):
         """
@@ -14493,7 +14589,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "algo/spot/newOrderTwap", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "algo/spot/newOrderTwap", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_lending_auto_invest_target_asset_list(self, **params):
         """
@@ -14505,7 +14603,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/target-asset/list", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "lending/auto-invest/target-asset/list",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_capital_deposit_address_list(self, **params):
         """
@@ -14519,7 +14623,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "capital/deposit/address/list", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "capital/deposit/address/list", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_broker_sub_account_bnb_burn_margin_interest(self, **params):
         """
@@ -14533,7 +14639,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccount/bnbBurn/marginInterest", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "broker/subAccount/bnbBurn/marginInterest",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v2_post_loan_flexible_repay(self, **params):
         """
@@ -14547,7 +14659,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "loan/flexible/repay", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "post", "loan/flexible/repay", signed=True, data=params, version=2
+        )
 
     def margin_v2_get_loan_flexible_loanable_data(self, **params):
         """
@@ -14561,7 +14675,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/flexible/loanable/data", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get", "loan/flexible/loanable/data", signed=True, data=params, version=2
+        )
 
     def margin_v1_post_broker_sub_account_api_permission(self, **params):
         """
@@ -14575,7 +14691,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccountApi/permission", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "broker/subAccountApi/permission",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_broker_sub_account_api(self, **params):
         """
@@ -14589,7 +14711,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccountApi", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "broker/subAccountApi", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_dci_product_positions(self, **params):
         """
@@ -14603,7 +14727,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "dci/product/positions", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "dci/product/positions", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_convert_limit_cancel_order(self, **params):
         """
@@ -14617,7 +14743,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "convert/limit/cancelOrder", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "convert/limit/cancelOrder", signed=True, data=params, version=1
+        )
 
     def v3_post_order_list_oto(self, **params):
         """
@@ -14629,7 +14757,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_api("post", "orderList/oto", signed=True, data=params, version="v3")
+        return self._request_api(
+            "post", "orderList/oto", signed=True, data=params, version="v3"
+        )
 
     def margin_v1_get_mining_hash_transfer_config_details_list(self, **params):
         """
@@ -14643,7 +14773,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "mining/hash-transfer/config/details/list", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "mining/hash-transfer/config/details/list",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_mining_hash_transfer_profit_details(self, **params):
         """
@@ -14657,7 +14793,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "mining/hash-transfer/profit/details", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "mining/hash-transfer/profit/details",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_broker_sub_account(self, **params):
         """
@@ -14671,7 +14813,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccount", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "broker/subAccount", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_portfolio_balance(self, **params):
         """
@@ -14685,7 +14829,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "portfolio/balance", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "portfolio/balance", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_sub_account_eoptions_enable(self, **params):
         """
@@ -14699,7 +14845,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "sub-account/eoptions/enable", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "sub-account/eoptions/enable", signed=True, data=params, version=1
+        )
 
     def papi_v1_post_ping(self, **params):
         """
@@ -14711,7 +14859,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_papi_api("post", "ping", signed=True, data=params, version=1)
+        return self._request_papi_api(
+            "post", "ping", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_loan_loanable_data(self, **params):
         """
@@ -14723,7 +14873,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/loanable/data", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/loanable/data", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_eth_staking_wbeth_unwrap(self, **params):
         """
@@ -14735,7 +14887,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "eth-staking/wbeth/unwrap", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "eth-staking/wbeth/unwrap", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_eth_staking_eth_history_staking_history(self, **params):
         """
@@ -14749,7 +14903,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "eth-staking/eth/history/stakingHistory", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "eth-staking/eth/history/stakingHistory",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_staking_staking_record(self, **params):
         """
@@ -14761,7 +14921,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "staking/stakingRecord", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "staking/stakingRecord", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_broker_rebate_recent_record(self, **params):
         """
@@ -14775,7 +14937,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/rebate/recentRecord", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "broker/rebate/recentRecord", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_loan_vip_collateral_account(self, **params):
         """
@@ -14789,7 +14953,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/vip/collateral/account", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/vip/collateral/account", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_algo_spot_open_orders(self, **params):
         """
@@ -14803,7 +14969,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "algo/spot/openOrders", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "algo/spot/openOrders", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_loan_repay(self, **params):
         """
@@ -14815,7 +14983,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "loan/repay", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "loan/repay", signed=True, data=params, version=1
+        )
 
     def futures_coin_v1_get_funding_info(self, **params):
         """
@@ -14829,7 +14999,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_coin_api("get", "fundingInfo", signed=False, data=params, version=1)
+        return self._request_futures_coin_api(
+            "get", "fundingInfo", signed=False, data=params, version=1
+        )
 
     def margin_v1_get_margin_leverage_bracket(self, **params):
         """
@@ -14843,7 +15015,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "margin/leverageBracket", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "margin/leverageBracket", signed=True, data=params, version=1
+        )
 
     def margin_v2_get_portfolio_collateral_rate(self, **params):
         """
@@ -14857,7 +15031,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "portfolio/collateralRate", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get", "portfolio/collateralRate", signed=True, data=params, version=2
+        )
 
     def margin_v2_post_loan_flexible_adjust_ltv(self, **params):
         """
@@ -14871,7 +15047,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "loan/flexible/adjust/ltv", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "post", "loan/flexible/adjust/ltv", signed=True, data=params, version=2
+        )
 
     def margin_v1_get_convert_order_status(self, **params):
         """
@@ -14885,7 +15063,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "convert/orderStatus", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "convert/orderStatus", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_broker_sub_account_api_ip_restriction(self, **params):
         """
@@ -14899,7 +15079,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccountApi/ipRestriction", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "broker/subAccountApi/ipRestriction",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_dci_product_subscribe(self, **params):
         """
@@ -14913,7 +15099,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "dci/product/subscribe", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "dci/product/subscribe", signed=True, data=params, version=1
+        )
 
     def futures_v1_get_income_asyn_id(self, **params):
         """
@@ -14927,7 +15115,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "income/asyn/id", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "income/asyn/id", signed=True, data=params, version=1
+        )
 
     def options_v1_post_countdown_cancel_all(self, **params):
         """
@@ -14941,7 +15131,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_options_api("post", "countdownCancelAll", signed=True, data=params)
+        return self._request_options_api(
+            "post", "countdownCancelAll", signed=True, data=params
+        )
 
     def margin_v1_post_mining_hash_transfer_config_cancel(self, **params):
         """
@@ -14955,7 +15147,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "mining/hash-transfer/config/cancel", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "mining/hash-transfer/config/cancel",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_broker_sub_account_deposit_hist(self, **params):
         """
@@ -14969,7 +15167,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccount/depositHist", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "broker/subAccount/depositHist", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_mining_payment_list(self, **params):
         """
@@ -14983,7 +15183,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "mining/payment/list", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "mining/payment/list", signed=True, data=params, version=1
+        )
 
     def futures_v1_get_pm_account_info(self, **params):
         """
@@ -14997,7 +15199,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "pmAccountInfo", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "pmAccountInfo", signed=True, data=params, version=1
+        )
 
     def futures_coin_v1_get_adl_quantile(self, **params):
         """
@@ -15011,7 +15215,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_coin_api("get", "adlQuantile", signed=True, data=params, version=1)
+        return self._request_futures_coin_api(
+            "get", "adlQuantile", signed=True, data=params, version=1
+        )
 
     def options_v1_get_income_asyn_id(self, **params):
         """
@@ -15025,7 +15231,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_options_api("get", "income/asyn/id", signed=True, data=params)
+        return self._request_options_api(
+            "get", "income/asyn/id", signed=True, data=params
+        )
 
     def v3_post_cancel_replace(self, **params):
         """
@@ -15037,7 +15245,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_api("post", "cancelReplace", signed=True, data=params, version="v3")
+        return self._request_api(
+            "post", "cancelReplace", signed=True, data=params, version="v3"
+        )
 
     def margin_v1_post_account_enable_fast_withdraw_switch(self, **params):
         """
@@ -15051,7 +15261,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "account/enableFastWithdrawSwitch", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "account/enableFastWithdrawSwitch",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_broker_transfer_futures(self, **params):
         """
@@ -15065,7 +15281,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/transfer/futures", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "broker/transfer/futures", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_sol_staking_sol_stake(self, **params):
         """
@@ -15079,7 +15297,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "sol-staking/sol/stake", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "sol-staking/sol/stake", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_loan_borrow(self, **params):
         """
@@ -15091,7 +15311,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "loan/borrow", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "loan/borrow", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_managed_subaccount_info(self, **params):
         """
@@ -15105,7 +15327,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "managed-subaccount/info", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "managed-subaccount/info", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_lending_auto_invest_plan_edit_status(self, **params):
         """
@@ -15117,7 +15341,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "lending/auto-invest/plan/edit-status", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "lending/auto-invest/plan/edit-status",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_sol_staking_sol_history_unclaimed_rewards(self, **params):
         """
@@ -15131,7 +15361,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "sol-staking/sol/history/unclaimedRewards", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "sol-staking/sol/history/unclaimedRewards",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_asset_convert_transfer_query_by_page(self, **params):
         """
@@ -15143,7 +15379,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "asset/convert-transfer/queryByPage", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "asset/convert-transfer/queryByPage",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_sol_staking_sol_history_boost_rewards_history(self, **params):
         """
@@ -15157,7 +15399,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "sol-staking/sol/history/boostRewardsHistory", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "sol-staking/sol/history/boostRewardsHistory",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_lending_auto_invest_one_off_status(self, **params):
         """
@@ -15169,7 +15417,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/one-off/status", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "lending/auto-invest/one-off/status",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_broker_sub_account(self, **params):
         """
@@ -15183,7 +15437,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccount", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "broker/subAccount", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_asset_ledger_transfer_cloud_mining_query_by_page(self, **params):
         """
@@ -15197,7 +15453,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "asset/ledger-transfer/cloud-mining/queryByPage", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "asset/ledger-transfer/cloud-mining/queryByPage",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_mining_pub_coin_list(self, **params):
         """
@@ -15211,7 +15473,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "mining/pub/coinList", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "mining/pub/coinList", signed=True, data=params, version=1
+        )
 
     def margin_v2_get_loan_flexible_repay_history(self, **params):
         """
@@ -15225,7 +15489,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/flexible/repay/history", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get", "loan/flexible/repay/history", signed=True, data=params, version=2
+        )
 
     def v3_post_sor_order(self, **params):
         """
@@ -15237,7 +15503,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_api("post", "sor/order", signed=True, data=params, version="v3")
+        return self._request_api(
+            "post", "sor/order", signed=True, data=params, version="v3"
+        )
 
     def margin_v1_post_capital_deposit_credit_apply(self, **params):
         """
@@ -15251,7 +15519,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "capital/deposit/credit-apply", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "capital/deposit/credit-apply", signed=True, data=params, version=1
+        )
 
     def futures_v1_put_batch_order(self, **params):
         """
@@ -15263,7 +15533,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("put", "batchOrder", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "put", "batchOrder", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_mining_statistics_user_list(self, **params):
         """
@@ -15277,7 +15549,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "mining/statistics/user/list", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "mining/statistics/user/list", signed=True, data=params, version=1
+        )
 
     def futures_v1_post_batch_order(self, **params):
         """
@@ -15289,7 +15563,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("post", "batchOrder", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "post", "batchOrder", signed=True, data=params, version=1
+        )
 
     def v3_get_ticker_trading_day(self, **params):
         """
@@ -15301,7 +15577,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_api("get", "ticker/tradingDay", signed=False, data=params, version="v3")
+        return self._request_api(
+            "get", "ticker/tradingDay", signed=False, data=params, version="v3"
+        )
 
     def margin_v1_get_mining_worker_detail(self, **params):
         """
@@ -15315,7 +15593,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "mining/worker/detail", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "mining/worker/detail", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_managed_subaccount_fetch_future_asset(self, **params):
         """
@@ -15329,7 +15609,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "managed-subaccount/fetch-future-asset", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "managed-subaccount/fetch-future-asset",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_margin_rate_limit_order(self, **params):
         """
@@ -15343,7 +15629,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "margin/rateLimit/order", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "margin/rateLimit/order", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_localentity_vasp(self, **params):
         """
@@ -15357,7 +15645,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "localentity/vasp", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "localentity/vasp", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_sol_staking_sol_history_rate_history(self, **params):
         """
@@ -15371,7 +15661,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "sol-staking/sol/history/rateHistory", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "sol-staking/sol/history/rateHistory",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_broker_sub_account_api_ip_restriction(self, **params):
         """
@@ -15383,7 +15679,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccountApi/ipRestriction", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "broker/subAccountApi/ipRestriction",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_broker_transfer(self, **params):
         """
@@ -15397,7 +15699,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/transfer", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "broker/transfer", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_sol_staking_account(self, **params):
         """
@@ -15411,7 +15715,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "sol-staking/account", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "sol-staking/account", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_account_info(self, **params):
         """
@@ -15425,7 +15731,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "account/info", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "account/info", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_portfolio_repay_futures_switch(self, **params):
         """
@@ -15439,7 +15747,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "portfolio/repay-futures-switch", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "portfolio/repay-futures-switch",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_loan_vip_borrow(self, **params):
         """
@@ -15451,7 +15765,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "loan/vip/borrow", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "loan/vip/borrow", signed=True, data=params, version=1
+        )
 
     def margin_v2_get_loan_flexible_ltv_adjustment_history(self, **params):
         """
@@ -15465,7 +15781,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/flexible/ltv/adjustment/history", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get",
+            "loan/flexible/ltv/adjustment/history",
+            signed=True,
+            data=params,
+            version=2,
+        )
 
     def options_v1_delete_all_open_orders_by_underlying(self, **params):
         """
@@ -15479,7 +15801,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_options_api("delete", "allOpenOrdersByUnderlying", signed=True, data=params)
+        return self._request_options_api(
+            "delete", "allOpenOrdersByUnderlying", signed=True, data=params
+        )
 
     def margin_v1_get_broker_sub_account_futures_summary(self, **params):
         """
@@ -15491,7 +15815,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccount/futuresSummary", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "broker/subAccount/futuresSummary",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_broker_sub_account_spot_summary(self, **params):
         """
@@ -15505,7 +15835,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccount/spotSummary", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "broker/subAccount/spotSummary", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_sub_account_blvt_enable(self, **params):
         """
@@ -15517,7 +15849,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "sub-account/blvt/enable", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "sub-account/blvt/enable", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_algo_spot_historical_orders(self, **params):
         """
@@ -15531,7 +15865,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "algo/spot/historicalOrders", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "algo/spot/historicalOrders", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_loan_vip_repay_history(self, **params):
         """
@@ -15545,7 +15881,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/vip/repay/history", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/vip/repay/history", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_loan_borrow_history(self, **params):
         """
@@ -15559,7 +15897,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/borrow/history", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/borrow/history", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_lending_auto_invest_redeem(self, **params):
         """
@@ -15571,7 +15911,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "lending/auto-invest/redeem", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "lending/auto-invest/redeem", signed=True, data=params, version=1
+        )
 
     def futures_coin_v1_get_income_asyn(self, **params):
         """
@@ -15585,7 +15927,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_coin_api("get", "income/asyn", signed=True, data=params, version=1)
+        return self._request_futures_coin_api(
+            "get", "income/asyn", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_managed_subaccount_deposit(self, **params):
         """
@@ -15599,7 +15943,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "managed-subaccount/deposit", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "managed-subaccount/deposit", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_lending_daily_purchase(self, **params):
         """
@@ -15611,7 +15957,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "lending/daily/purchase", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "lending/daily/purchase", signed=True, data=params, version=1
+        )
 
     def futures_v1_get_trade_asyn_id(self, **params):
         """
@@ -15625,9 +15973,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "trade/asyn/id", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "trade/asyn/id", signed=True, data=params, version=1
+        )
 
-    def margin_v1_delete_sub_account_sub_account_api_ip_restriction_ip_list(self, **params):
+    def margin_v1_delete_sub_account_sub_account_api_ip_restriction_ip_list(
+        self, **params
+    ):
         """
         Placeholder function for DELETE /sapi/v1/sub-account/subAccountApi/ipRestriction/ipList.
         Note: This function was auto-generated. Any issue please open an issue on GitHub.
@@ -15639,7 +15991,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("delete", "sub-account/subAccountApi/ipRestriction/ipList", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "delete",
+            "sub-account/subAccountApi/ipRestriction/ipList",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_copy_trading_futures_user_status(self, **params):
         """
@@ -15653,7 +16011,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "copyTrading/futures/userStatus", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "copyTrading/futures/userStatus", signed=True, data=params, version=1
+        )
 
     def options_v1_get_margin_account(self, **params):
         """
@@ -15667,7 +16027,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_options_api("get", "marginAccount", signed=True, data=params)
+        return self._request_options_api(
+            "get", "marginAccount", signed=True, data=params
+        )
 
     def options_get_market_maker_protection_config(self, **params):
         """
@@ -15728,7 +16090,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "localentity/withdraw/apply", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "localentity/withdraw/apply", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_asset_wallet_balance(self, **params):
         """
@@ -15742,7 +16106,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "asset/wallet/balance", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "asset/wallet/balance", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_broker_transfer(self, **params):
         """
@@ -15756,7 +16122,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/transfer", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "broker/transfer", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_lending_customized_fixed_purchase(self, **params):
         """
@@ -15768,7 +16136,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "lending/customizedFixed/purchase", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "lending/customizedFixed/purchase",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_algo_futures_new_order_twap(self, **params):
         """
@@ -15782,7 +16156,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "algo/futures/newOrderTwap", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "algo/futures/newOrderTwap", signed=True, data=params, version=1
+        )
 
     def margin_v2_post_eth_staking_eth_stake(self, **params):
         """
@@ -15796,7 +16172,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "eth-staking/eth/stake", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "post", "eth-staking/eth/stake", signed=True, data=params, version=2
+        )
 
     def margin_v1_post_loan_flexible_repay_history(self, **params):
         """
@@ -15808,7 +16186,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "loan/flexible/repay/history", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "loan/flexible/repay/history", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_lending_auto_invest_index_info(self, **params):
         """
@@ -15820,7 +16200,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/index/info", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "lending/auto-invest/index/info", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_sol_staking_sol_history_redemption_history(self, **params):
         """
@@ -15834,7 +16216,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "sol-staking/sol/history/redemptionHistory", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "sol-staking/sol/history/redemptionHistory",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_broker_rebate_futures_recent_record(self, **params):
         """
@@ -15848,7 +16236,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/rebate/futures/recentRecord", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "broker/rebate/futures/recentRecord",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v3_get_broker_sub_account_futures_summary(self, **params):
         """
@@ -15862,7 +16256,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccount/futuresSummary", signed=True, data=params, version=3)
+        return self._request_margin_api(
+            "get",
+            "broker/subAccount/futuresSummary",
+            signed=True,
+            data=params,
+            version=3,
+        )
 
     def margin_v1_get_lending_auto_invest_target_asset_roi_list(self, **params):
         """
@@ -15874,7 +16274,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/target-asset/roi/list", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "lending/auto-invest/target-asset/roi/list",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_broker_universal_transfer(self, **params):
         """
@@ -15888,7 +16294,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/universalTransfer", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "broker/universalTransfer", signed=True, data=params, version=1
+        )
 
     def futures_v1_put_batch_orders(self, **params):
         """
@@ -15902,7 +16310,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("put", "batchOrders", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "put", "batchOrders", signed=True, data=params, version=1
+        )
 
     def options_v1_post_countdown_cancel_all_heart_beat(self, **params):
         """
@@ -15916,7 +16326,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_options_api("post", "countdownCancelAllHeartBeat", signed=True, data=params)
+        return self._request_options_api(
+            "post", "countdownCancelAllHeartBeat", signed=True, data=params
+        )
 
     def margin_v1_get_loan_collateral_data(self, **params):
         """
@@ -15928,7 +16340,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/collateral/data", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/collateral/data", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_loan_repay_history(self, **params):
         """
@@ -15942,7 +16356,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/repay/history", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/repay/history", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_convert_limit_place_order(self, **params):
         """
@@ -15956,7 +16372,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "convert/limit/placeOrder", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "convert/limit/placeOrder", signed=True, data=params, version=1
+        )
 
     def futures_v1_get_convert_exchange_info(self, **params):
         """
@@ -15970,7 +16388,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "convert/exchangeInfo", signed=False, data=params, version=1)
+        return self._request_futures_api(
+            "get", "convert/exchangeInfo", signed=False, data=params, version=1
+        )
 
     def v3_get_all_order_list(self, **params):
         """
@@ -15982,7 +16402,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_api("get", "allOrderList", signed=True, data=params, version="v3")
+        return self._request_api(
+            "get", "allOrderList", signed=True, data=params, version="v3"
+        )
 
     def margin_v1_delete_broker_sub_account_api_ip_restriction_ip_list(self, **params):
         """
@@ -15996,7 +16418,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("delete", "broker/subAccountApi/ipRestriction/ipList", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "delete",
+            "broker/subAccountApi/ipRestriction/ipList",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_sub_account_virtual_sub_account(self, **params):
         """
@@ -16010,7 +16438,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "sub-account/virtualSubAccount", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "sub-account/virtualSubAccount", signed=True, data=params, version=1
+        )
 
     def margin_v1_put_localentity_deposit_provide_info(self, **params):
         """
@@ -16024,7 +16454,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("put", "localentity/deposit/provide-info", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "put",
+            "localentity/deposit/provide-info",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_portfolio_mint(self, **params):
         """
@@ -16038,7 +16474,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "portfolio/mint", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "portfolio/mint", signed=True, data=params, version=1
+        )
 
     def futures_v1_get_order_amendment(self, **params):
         """
@@ -16052,7 +16490,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "orderAmendment", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "orderAmendment", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_sol_staking_sol_claim(self, **params):
         """
@@ -16066,7 +16506,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "sol-staking/sol/claim", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "sol-staking/sol/claim", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_lending_daily_redeem(self, **params):
         """
@@ -16078,7 +16520,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "lending/daily/redeem", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "lending/daily/redeem", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_mining_hash_transfer_config(self, **params):
         """
@@ -16092,7 +16536,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "mining/hash-transfer/config", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "mining/hash-transfer/config", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_lending_auto_invest_rebalance_history(self, **params):
         """
@@ -16104,7 +16550,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/rebalance/history", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "lending/auto-invest/rebalance/history",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_loan_repay_collateral_rate(self, **params):
         """
@@ -16116,7 +16568,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/repay/collateral/rate", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/repay/collateral/rate", signed=True, data=params, version=1
+        )
 
     def futures_v1_get_income_asyn(self, **params):
         """
@@ -16130,7 +16584,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "income/asyn", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "income/asyn", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_mining_payment_uid(self, **params):
         """
@@ -16144,7 +16600,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "mining/payment/uid", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "mining/payment/uid", signed=True, data=params, version=1
+        )
 
     def margin_v2_get_loan_flexible_borrow_history(self, **params):
         """
@@ -16158,7 +16616,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/flexible/borrow/history", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get", "loan/flexible/borrow/history", signed=True, data=params, version=2
+        )
 
     def margin_v1_get_capital_contract_convertible_coins(self, **params):
         """
@@ -16170,9 +16630,17 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "capital/contract/convertible-coins", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "capital/contract/convertible-coins",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
-    def margin_v1_post_broker_sub_account_api_permission_vanilla_options(self, **params):
+    def margin_v1_post_broker_sub_account_api_permission_vanilla_options(
+        self, **params
+    ):
         """
         Placeholder function for POST /sapi/v1/broker/subAccountApi/permission/vanillaOptions.
         Note: This function was auto-generated. Any issue please open an issue on GitHub.
@@ -16182,7 +16650,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccountApi/permission/vanillaOptions", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "broker/subAccountApi/permission/vanillaOptions",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_lending_auto_invest_redeem_history(self, **params):
         """
@@ -16196,7 +16670,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/redeem/history", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "lending/auto-invest/redeem/history",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v2_get_localentity_withdraw_history(self, **params):
         """
@@ -16210,7 +16690,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "localentity/withdraw/history", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get", "localentity/withdraw/history", signed=True, data=params, version=2
+        )
 
     def margin_v1_get_eth_staking_eth_history_redemption_history(self, **params):
         """
@@ -16224,7 +16706,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "eth-staking/eth/history/redemptionHistory", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "eth-staking/eth/history/redemptionHistory",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def futures_v1_get_fee_burn(self, **params):
         """
@@ -16238,7 +16726,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "feeBurn", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "feeBurn", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_lending_auto_invest_index_user_summary(self, **params):
         """
@@ -16250,7 +16740,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/index/user-summary", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "lending/auto-invest/index/user-summary",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v2_post_loan_flexible_borrow(self, **params):
         """
@@ -16264,7 +16760,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "loan/flexible/borrow", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "post", "loan/flexible/borrow", signed=True, data=params, version=2
+        )
 
     def margin_v1_post_loan_vip_repay(self, **params):
         """
@@ -16278,7 +16776,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "loan/vip/repay", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "loan/vip/repay", signed=True, data=params, version=1
+        )
 
     def futures_coin_v1_get_commission_rate(self, **params):
         """
@@ -16292,7 +16792,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_coin_api("get", "commissionRate", signed=True, data=params, version=1)
+        return self._request_futures_coin_api(
+            "get", "commissionRate", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_convert_asset_info(self, **params):
         """
@@ -16306,7 +16808,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "convert/assetInfo", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "convert/assetInfo", signed=True, data=params, version=1
+        )
 
     def v3_post_sor_order_test(self, **params):
         """
@@ -16318,7 +16822,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_api("post", "sor/order/test", signed=True, data=params, version="v3")
+        return self._request_api(
+            "post", "sor/order/test", signed=True, data=params, version="v3"
+        )
 
     def margin_v1_post_broker_universal_transfer(self, **params):
         """
@@ -16332,7 +16838,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/universalTransfer", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "broker/universalTransfer", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_account_disable_fast_withdraw_switch(self, **params):
         """
@@ -16346,7 +16854,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "account/disableFastWithdrawSwitch", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "account/disableFastWithdrawSwitch",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def futures_v1_get_asset_index(self, **params):
         """
@@ -16360,7 +16874,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "assetIndex", signed=False, data=params, version=1)
+        return self._request_futures_api(
+            "get", "assetIndex", signed=False, data=params, version=1
+        )
 
     def margin_v1_get_account_api_restrictions_ip_restriction(self, **params):
         """
@@ -16372,7 +16888,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "account/apiRestrictions/ipRestriction", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "account/apiRestrictions/ipRestriction",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_broker_sub_account_bnb_burn_spot(self, **params):
         """
@@ -16386,7 +16908,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccount/bnbBurn/spot", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "broker/subAccount/bnbBurn/spot",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def futures_coin_v1_put_order(self, **params):
         """
@@ -16400,7 +16928,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_coin_api("put", "order", signed=True, data=params, version=1)
+        return self._request_futures_coin_api(
+            "put", "order", signed=True, data=params, version=1
+        )
 
     def futures_coin_v1_put_batch_orders(self, **params):
         """
@@ -16414,7 +16944,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_coin_api("put", "batchOrders", signed=True, data=params, version=1)
+        return self._request_futures_coin_api(
+            "put", "batchOrders", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_margin_delist_schedule(self, **params):
         """
@@ -16426,9 +16958,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "margin/delist-schedule", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "margin/delist-schedule", signed=True, data=params, version=1
+        )
 
-    def margin_v1_post_broker_sub_account_api_permission_universal_transfer(self, **params):
+    def margin_v1_post_broker_sub_account_api_permission_universal_transfer(
+        self, **params
+    ):
         """
         Placeholder function for POST /sapi/v1/broker/subAccountApi/permission/universalTransfer.
         Note: This function was auto-generated. Any issue please open an issue on GitHub.
@@ -16440,7 +16976,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccountApi/permission/universalTransfer", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "broker/subAccountApi/permission/universalTransfer",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_loan_ltv_adjustment_history(self, **params):
         """
@@ -16454,7 +16996,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/ltv/adjustment/history", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/ltv/adjustment/history", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_localentity_withdraw_history(self, **params):
         """
@@ -16466,7 +17010,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "localentity/withdraw/history", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "localentity/withdraw/history", signed=True, data=params, version=1
+        )
 
     def margin_v2_post_sub_account_sub_account_api_ip_restriction(self, **params):
         """
@@ -16480,7 +17026,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "sub-account/subAccountApi/ipRestriction", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "post",
+            "sub-account/subAccountApi/ipRestriction",
+            signed=True,
+            data=params,
+            version=2,
+        )
 
     def futures_v1_get_rate_limit_order(self, **params):
         """
@@ -16494,7 +17046,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "rateLimit/order", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "rateLimit/order", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_broker_sub_account_api_commission_futures(self, **params):
         """
@@ -16508,7 +17062,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccountApi/commission/futures", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "broker/subAccountApi/commission/futures",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_sol_staking_sol_history_staking_history(self, **params):
         """
@@ -16522,7 +17082,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "sol-staking/sol/history/stakingHistory", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "sol-staking/sol/history/stakingHistory",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def futures_v1_get_open_order(self, **params):
         """
@@ -16536,7 +17102,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "openOrder", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "openOrder", signed=True, data=params, version=1
+        )
 
     def margin_v1_delete_algo_spot_order(self, **params):
         """
@@ -16550,9 +17118,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("delete", "algo/spot/order", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "delete", "algo/spot/order", signed=True, data=params, version=1
+        )
 
-    def margin_v1_delete_account_api_restrictions_ip_restriction_ip_list(self, **params):
+    def margin_v1_delete_account_api_restrictions_ip_restriction_ip_list(
+        self, **params
+    ):
         """
         Placeholder function for DELETE /sapi/v1/account/apiRestrictions/ipRestriction/ipList.
         Note: This function was auto-generated. Any issue please open an issue on GitHub.
@@ -16562,7 +17134,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("delete", "account/apiRestrictions/ipRestriction/ipList", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "delete",
+            "account/apiRestrictions/ipRestriction/ipList",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_capital_contract_convertible_coins(self, **params):
         """
@@ -16574,7 +17152,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "capital/contract/convertible-coins", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "capital/contract/convertible-coins",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_managed_subaccount_margin_asset(self, **params):
         """
@@ -16588,7 +17172,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "managed-subaccount/marginAsset", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "managed-subaccount/marginAsset", signed=True, data=params, version=1
+        )
 
     def v3_delete_order_list(self, **params):
         """
@@ -16600,9 +17186,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_api("delete", "orderList", signed=True, data=params, version="v3")
+        return self._request_api(
+            "delete", "orderList", signed=True, data=params, version="v3"
+        )
 
-    def margin_v1_post_sub_account_sub_account_api_ip_restriction_ip_list(self, **params):
+    def margin_v1_post_sub_account_sub_account_api_ip_restriction_ip_list(
+        self, **params
+    ):
         """
         Placeholder function for POST /sapi/v1/sub-account/subAccountApi/ipRestriction/ipList.
         Note: This function was auto-generated. Any issue please open an issue on GitHub.
@@ -16612,7 +17202,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "sub-account/subAccountApi/ipRestriction/ipList", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "sub-account/subAccountApi/ipRestriction/ipList",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_broker_sub_account_api_commission(self, **params):
         """
@@ -16626,7 +17222,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccountApi/commission", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "broker/subAccountApi/commission",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def futures_v1_post_fee_burn(self, **params):
         """
@@ -16640,7 +17242,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("post", "feeBurn", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "post", "feeBurn", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_broker_sub_account_margin_summary(self, **params):
         """
@@ -16654,7 +17258,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccount/marginSummary", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "broker/subAccount/marginSummary",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_lending_auto_invest_plan_list(self, **params):
         """
@@ -16666,7 +17276,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/plan/list", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "lending/auto-invest/plan/list", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_loan_vip_loanable_data(self, **params):
         """
@@ -16680,7 +17292,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/vip/loanable/data", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/vip/loanable/data", signed=True, data=params, version=1
+        )
 
     def margin_v2_get_loan_flexible_collateral_data(self, **params):
         """
@@ -16694,7 +17308,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/flexible/collateral/data", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get", "loan/flexible/collateral/data", signed=True, data=params, version=2
+        )
 
     def margin_v1_delete_broker_sub_account_api(self, **params):
         """
@@ -16708,7 +17324,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("delete", "broker/subAccountApi", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "delete", "broker/subAccountApi", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_sol_staking_sol_history_bnsol_rewards_history(self, **params):
         """
@@ -16722,7 +17340,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "sol-staking/sol/history/bnsolRewardsHistory", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "sol-staking/sol/history/bnsolRewardsHistory",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_convert_limit_query_open_orders(self, **params):
         """
@@ -16736,7 +17360,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "convert/limit/queryOpenOrders", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "convert/limit/queryOpenOrders", signed=True, data=params, version=1
+        )
 
     def v3_get_account_commission(self, **params):
         """
@@ -16748,7 +17374,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_api("get", "account/commission", signed=True, data=params, version="v3")
+        return self._request_api(
+            "get", "account/commission", signed=True, data=params, version="v3"
+        )
 
     def margin_v1_get_managed_subaccount_query_trans_log(self, **params):
         """
@@ -16762,7 +17390,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "managed-subaccount/query-trans-log", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "managed-subaccount/query-trans-log",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v2_post_broker_sub_account_api_ip_restriction(self, **params):
         """
@@ -16776,7 +17410,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccountApi/ipRestriction", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "post",
+            "broker/subAccountApi/ipRestriction",
+            signed=True,
+            data=params,
+            version=2,
+        )
 
     def margin_v1_get_lending_auto_invest_all_asset(self, **params):
         """
@@ -16788,7 +17428,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/all/asset", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "lending/auto-invest/all/asset", signed=True, data=params, version=1
+        )
 
     def futures_v1_post_convert_accept_quote(self, **params):
         """
@@ -16802,7 +17444,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("post", "convert/acceptQuote", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "post", "convert/acceptQuote", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_spot_delist_schedule(self, **params):
         """
@@ -16816,7 +17460,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "spot/delist-schedule", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "spot/delist-schedule", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_account_api_restrictions_ip_restriction(self, **params):
         """
@@ -16828,7 +17474,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "account/apiRestrictions/ipRestriction", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "account/apiRestrictions/ipRestriction",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_dci_product_accounts(self, **params):
         """
@@ -16842,7 +17494,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "dci/product/accounts", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "dci/product/accounts", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_sub_account_sub_account_api_ip_restriction(self, **params):
         """
@@ -16856,7 +17510,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "sub-account/subAccountApi/ipRestriction", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "sub-account/subAccountApi/ipRestriction",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_sub_account_transaction_statistics(self, **params):
         """
@@ -16870,7 +17530,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "sub-account/transaction-statistics", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "sub-account/transaction-statistics",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_managed_subaccount_deposit_address(self, **params):
         """
@@ -16884,7 +17550,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "managed-subaccount/deposit/address", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "managed-subaccount/deposit/address",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v2_get_portfolio_account(self, **params):
         """
@@ -16898,7 +17570,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "portfolio/account", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get", "portfolio/account", signed=True, data=params, version=2
+        )
 
     def margin_v1_get_simple_earn_locked_history_redemption_record(self, **params):
         """
@@ -16912,7 +17586,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "simple-earn/locked/history/redemptionRecord", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "simple-earn/locked/history/redemptionRecord",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def futures_v1_get_order_asyn_id(self, **params):
         """
@@ -16926,7 +17606,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "order/asyn/id", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "order/asyn/id", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_managed_subaccount_withdraw(self, **params):
         """
@@ -16940,7 +17622,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "managed-subaccount/withdraw", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "managed-subaccount/withdraw", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_localentity_deposit_history(self, **params):
         """
@@ -16954,7 +17638,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "localentity/deposit/history", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "localentity/deposit/history", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_eth_staking_wbeth_wrap(self, **params):
         """
@@ -16968,7 +17654,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "eth-staking/wbeth/wrap", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "eth-staking/wbeth/wrap", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_simple_earn_locked_set_redeem_option(self, **params):
         """
@@ -16982,7 +17670,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "simple-earn/locked/setRedeemOption", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "simple-earn/locked/setRedeemOption",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_broker_sub_account_api_ip_restriction_ip_list(self, **params):
         """
@@ -16994,7 +17688,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccountApi/ipRestriction/ipList", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "broker/subAccountApi/ipRestriction/ipList",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_broker_sub_account_api_commission_futures(self, **params):
         """
@@ -17008,7 +17708,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "broker/subAccountApi/commission/futures", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "broker/subAccountApi/commission/futures",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_lending_auto_invest_history_list(self, **params):
         """
@@ -17020,7 +17726,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/history/list", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "lending/auto-invest/history/list",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_loan_customize_margin_call(self, **params):
         """
@@ -17032,7 +17744,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "loan/customize/margin_call", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "loan/customize/margin_call", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_broker_sub_account_bnb_burn_status(self, **params):
         """
@@ -17046,7 +17760,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccount/bnbBurn/status", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "broker/subAccount/bnbBurn/status",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_managed_subaccount_account_snapshot(self, **params):
         """
@@ -17060,7 +17780,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "managed-subaccount/accountSnapshot", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "managed-subaccount/accountSnapshot",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_asset_convert_transfer(self, **params):
         """
@@ -17072,7 +17798,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "asset/convert-transfer", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "asset/convert-transfer", signed=True, data=params, version=1
+        )
 
     def options_v1_get_income_asyn(self, **params):
         """
@@ -17100,7 +17828,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccountApi/commission/coinFutures", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "broker/subAccountApi/commission/coinFutures",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v2_get_broker_sub_account_futures_summary(self, **params):
         """
@@ -17112,7 +17846,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccount/futuresSummary", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get",
+            "broker/subAccount/futuresSummary",
+            signed=True,
+            data=params,
+            version=2,
+        )
 
     def margin_v1_get_loan_ongoing_orders(self, **params):
         """
@@ -17124,7 +17864,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/ongoing/orders", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "loan/ongoing/orders", signed=True, data=params, version=1
+        )
 
     def margin_v2_get_loan_flexible_ongoing_orders(self, **params):
         """
@@ -17138,7 +17880,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "loan/flexible/ongoing/orders", signed=True, data=params, version=2)
+        return self._request_margin_api(
+            "get", "loan/flexible/ongoing/orders", signed=True, data=params, version=2
+        )
 
     def margin_v1_post_algo_futures_new_order_vp(self, **params):
         """
@@ -17152,7 +17896,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "algo/futures/newOrderVp", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "algo/futures/newOrderVp", signed=True, data=params, version=1
+        )
 
     def futures_v1_post_convert_get_quote(self, **params):
         """
@@ -17166,7 +17912,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("post", "convert/getQuote", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "post", "convert/getQuote", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_algo_spot_sub_orders(self, **params):
         """
@@ -17180,7 +17928,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "algo/spot/subOrders", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "algo/spot/subOrders", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_portfolio_redeem(self, **params):
         """
@@ -17194,7 +17944,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "portfolio/redeem", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "portfolio/redeem", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_lending_auto_invest_plan_add(self, **params):
         """
@@ -17206,7 +17958,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "lending/auto-invest/plan/add", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "lending/auto-invest/plan/add", signed=True, data=params, version=1
+        )
 
     def v3_get_order_list(self, **params):
         """
@@ -17218,7 +17972,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_api("get", "orderList", signed=True, data=params, version="v3")
+        return self._request_api(
+            "get", "orderList", signed=True, data=params, version="v3"
+        )
 
     def margin_v1_get_lending_auto_invest_source_asset_list(self, **params):
         """
@@ -17230,7 +17986,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "lending/auto-invest/source-asset/list", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "lending/auto-invest/source-asset/list",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_margin_all_order_list(self, **params):
         """
@@ -17244,7 +18006,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "margin/allOrderList", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "margin/allOrderList", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_eth_staking_eth_redeem(self, **params):
         """
@@ -17258,7 +18022,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "eth-staking/eth/redeem", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "eth-staking/eth/redeem", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_broker_rebate_historical_record(self, **params):
         """
@@ -17270,7 +18036,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/rebate/historicalRecord", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "broker/rebate/historicalRecord", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_simple_earn_locked_history_subscription_record(self, **params):
         """
@@ -17284,7 +18052,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "simple-earn/locked/history/subscriptionRecord", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "simple-earn/locked/history/subscriptionRecord",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_managed_subaccount_asset(self, **params):
         """
@@ -17298,7 +18072,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "managed-subaccount/asset", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "managed-subaccount/asset", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_sol_staking_sol_quota(self, **params):
         """
@@ -17312,7 +18088,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "sol-staking/sol/quota", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "sol-staking/sol/quota", signed=True, data=params, version=1
+        )
 
     def margin_v1_post_loan_vip_renew(self, **params):
         """
@@ -17324,9 +18102,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "loan/vip/renew", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post", "loan/vip/renew", signed=True, data=params, version=1
+        )
 
-    def margin_v1_get_managed_subaccount_query_trans_log_for_trade_parent(self, **params):
+    def margin_v1_get_managed_subaccount_query_trans_log_for_trade_parent(
+        self, **params
+    ):
         """
         Placeholder function for GET /sapi/v1/managed-subaccount/queryTransLogForTradeParent.
         Note: This function was auto-generated. Any issue please open an issue on GitHub.
@@ -17338,7 +18120,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "managed-subaccount/queryTransLogForTradeParent", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "managed-subaccount/queryTransLogForTradeParent",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_post_sub_account_sub_account_api_ip_restriction(self, **params):
         """
@@ -17350,7 +18138,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("post", "sub-account/subAccountApi/ipRestriction", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "post",
+            "sub-account/subAccountApi/ipRestriction",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_simple_earn_flexible_history_redemption_record(self, **params):
         """
@@ -17364,7 +18158,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "simple-earn/flexible/history/redemptionRecord", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "simple-earn/flexible/history/redemptionRecord",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_broker_sub_account_api(self, **params):
         """
@@ -17378,7 +18178,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "broker/subAccountApi", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "broker/subAccountApi", signed=True, data=params, version=1
+        )
 
     def options_v1_get_exercise_history(self, **params):
         """
@@ -17392,7 +18194,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_options_api("get", "exerciseHistory", signed=False, data=params)
+        return self._request_options_api(
+            "get", "exerciseHistory", signed=False, data=params
+        )
 
     def options_open_interest(self, **params):
         """Get present open interest specific underlying asset on specific expiration date.
@@ -17421,7 +18225,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "convert/exchangeInfo", signed=False, data=params, version=1)
+        return self._request_margin_api(
+            "get", "convert/exchangeInfo", signed=False, data=params, version=1
+        )
 
     def futures_v1_delete_batch_order(self, **params):
         """
@@ -17433,7 +18239,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("delete", "batchOrder", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "delete", "batchOrder", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_eth_staking_eth_history_wbeth_rewards_history(self, **params):
         """
@@ -17447,7 +18255,13 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "eth-staking/eth/history/wbethRewardsHistory", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get",
+            "eth-staking/eth/history/wbethRewardsHistory",
+            signed=True,
+            data=params,
+            version=1,
+        )
 
     def margin_v1_get_mining_pub_algo_list(self, **params):
         """
@@ -17461,7 +18275,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "mining/pub/algoList", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "mining/pub/algoList", signed=True, data=params, version=1
+        )
 
     def options_v1_get_block_trades(self, **params):
         """
@@ -17475,7 +18291,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_options_api("get", "blockTrades", signed=False, data=params)
+        return self._request_options_api(
+            "get", "blockTrades", signed=False, data=params
+        )
 
     def margin_v1_get_copy_trading_futures_lead_symbol(self, **params):
         """
@@ -17489,7 +18307,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "copyTrading/futures/leadSymbol", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "copyTrading/futures/leadSymbol", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_mining_worker_list(self, **params):
         """
@@ -17503,7 +18323,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "mining/worker/list", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "mining/worker/list", signed=True, data=params, version=1
+        )
 
     def margin_v1_get_dci_product_list(self, **params):
         """
@@ -17517,7 +18339,9 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_margin_api("get", "dci/product/list", signed=True, data=params, version=1)
+        return self._request_margin_api(
+            "get", "dci/product/list", signed=True, data=params, version=1
+        )
 
     def futures_v1_get_convert_order_status(self, **params):
         """
@@ -17531,4 +18355,6 @@ class Client(BaseClient):
 
         :returns: API response
         """
-        return self._request_futures_api("get", "convert/orderStatus", signed=True, data=params, version=1)
+        return self._request_futures_api(
+            "get", "convert/orderStatus", signed=True, data=params, version=1
+        )

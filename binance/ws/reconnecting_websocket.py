@@ -2,10 +2,10 @@ import asyncio
 import gzip
 import json
 import logging
-from socket import gaierror
-from typing import Optional
 from asyncio import sleep
 from random import random
+from socket import gaierror
+from typing import Optional
 
 # load orjson if available, otherwise default to json
 orjson = None
@@ -23,7 +23,8 @@ except ImportError:
 Proxy = None
 proxy_connect = None
 try:
-    from websockets_proxy import Proxy as w_Proxy, proxy_connect as w_proxy_connect
+    from websockets_proxy import Proxy as w_Proxy
+    from websockets_proxy import proxy_connect as w_proxy_connect
 
     Proxy = w_Proxy
     proxy_connect = w_proxy_connect
@@ -34,8 +35,8 @@ import websockets as ws
 
 from binance.exceptions import (
     BinanceWebsocketClosed,
-    BinanceWebsocketUnableToConnect,
     BinanceWebsocketQueueOverflow,
+    BinanceWebsocketUnableToConnect,
     ReadLoopClosed,
 )
 from binance.helpers import get_loop
@@ -131,10 +132,10 @@ class ReconnectingWebsocket:
 
         try:
             self.ws = await self._conn.__aenter__()
-        except Exception as e:  # noqa
+        except Exception as e:
             self._log.error(f"Failed to connect to websocket: {e}")
             self.ws_state = WSListenerState.RECONNECTING
-            raise e
+            raise
         self.ws_state = WSListenerState.STREAMING
         self._reconnects = 0
         await self._after_connect()
@@ -162,9 +163,6 @@ class ReconnectingWebsocket:
             except (ValueError, OSError) as e:
                 self._log.error(f"Failed to decompress message: {(e)}")
                 raise
-            except Exception as e:
-                self._log.error(f"Unexpected decompression error: {(e)}")
-                raise
         try:
             return self.json_loads(evt)
         except ValueError as e:
@@ -172,9 +170,6 @@ class ReconnectingWebsocket:
             raise
         except TypeError as e:
             self._log.error(f"JSON Type Error parsing message. Error: {(e)}")
-            raise
-        except Exception as e:
-            self._log.error(f"Unexpected error parsing message. Error: {(e)}")
             raise
 
     async def _read_loop(self):
@@ -198,7 +193,10 @@ class ReconnectingWebsocket:
                             "Connection closed. Reconnecting..."
                         )
                     elif self.ws_state == WSListenerState.STREAMING:
-                        assert self.ws
+                        if self.ws is None:
+                            raise BinanceWebsocketClosed(
+                                "Websocket is not connected. Reconnecting..."
+                            )
                         res = await asyncio.wait_for(
                             self.ws.recv(), timeout=self.TIMEOUT
                         )
@@ -266,7 +264,13 @@ class ReconnectingWebsocket:
             try:
                 await self.connect()
             except Exception as e:
-                pass
+                self._log.error(f"Failed to reconnect: {e}")
+                # Track this failed attempt so reconnect logic can progress
+                try:
+                    self._reconnects += 1
+                except Exception:
+                    # Ensure we don't crash if _reconnects isn't set
+                    self._reconnects = getattr(self, "_reconnects", 0) + 1
         else:
             self._log.error(f"Max reconnections {self.MAX_RECONNECTS} reached:")
             # Signal the error
