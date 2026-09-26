@@ -10,4 +10,8 @@ python_binance.egg-info/
 .idea/
 venv*/
 .vscode
-.binance/
+.binance/# Shell redirection artifacts
+=[0-9]*
+>[0-9]*
+*.tmp
+*.log

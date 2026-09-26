@@ -1,8 +1,9 @@
 import asyncio
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-from urllib.parse import urlencode, quote
-import time
+from urllib.parse import quote, urlencode
+
 import aiohttp
 import yarl
 
@@ -18,6 +19,7 @@ from binance.helpers import (
     get_loop,
     interval_to_milliseconds,
 )
+
 from .base_client import BaseClient
 from .client import Client
 
@@ -400,7 +402,7 @@ class AsyncClient(BaseClient):
                 # then we just move forward hour by hour until we find at least one
                 # trade or reach present moment
                 while True:
-                    end_ts = start_ts + (60 * 60 * 1000)
+                    end_ts = (start_ts or 0) + (60 * 60 * 1000)
                     trades = await self.get_aggregate_trades(
                         symbol=symbol, startTime=start_ts, endTime=end_ts
                     )
@@ -2006,11 +2008,11 @@ class AsyncClient(BaseClient):
     async def futures_cancel_orders(self, **params):
         if params.get("orderidlist"):
             params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
+                convert_list_to_json_array(params["orderidlist"]) or ""
             )
         if params.get("origclientorderidlist"):
             params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+                convert_list_to_json_array(params["origclientorderidlist"]) or ""
             )
         return await self._request_futures_api(
             "delete", "batchOrders", True, data=params, force_params=True
@@ -2267,11 +2269,11 @@ class AsyncClient(BaseClient):
     async def futures_coin_cancel_orders(self, **params):
         if params.get("orderidlist"):
             params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
+                convert_list_to_json_array(params["orderidlist"]) or ""
             )
         if params.get("origclientorderidlist"):
             params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+                convert_list_to_json_array(params["origclientorderidlist"]) or ""
             )
         return await self._request_futures_coin_api(
             "delete", "batchOrders", True, data=params

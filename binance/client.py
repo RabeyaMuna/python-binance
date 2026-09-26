@@ -1,23 +1,22 @@
+import time
 from pathlib import Path
-from typing import Dict, Optional, List, Union, Any
+from typing import Any, Dict, List, Optional, Union
+from urllib.parse import quote, urlencode
 
 import requests
-import time
-from urllib.parse import urlencode, quote
 
 from .base_client import BaseClient
-
-from .helpers import (
-    convert_list_to_json_array,
-    interval_to_milliseconds,
-    convert_ts_str,
-)
+from .enums import HistoricalKlinesType
 from .exceptions import (
     BinanceAPIException,
     BinanceRequestException,
     NotImplementedException,
 )
-from .enums import HistoricalKlinesType
+from .helpers import (
+    convert_list_to_json_array,
+    convert_ts_str,
+    interval_to_milliseconds,
+)
 
 
 class Client(BaseClient):
@@ -634,7 +633,7 @@ class Client(BaseClient):
                 # then we just move forward hour by hour until we find at least one
                 # trade or reach present moment
                 while True:
-                    end_ts = start_ts + (60 * 60 * 1000)
+                    end_ts = (start_ts or 0) + (60 * 60 * 1000)
                     trades = self.get_aggregate_trades(
                         symbol=symbol, startTime=start_ts, endTime=end_ts
                     )
@@ -7935,11 +7934,11 @@ class Client(BaseClient):
         """
         if params.get("orderidlist"):
             params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
+                convert_list_to_json_array(params["orderidlist"]) or ""
             )
         if params.get("origclientorderidlist"):
             params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+                convert_list_to_json_array(params["origclientorderidlist"]) or ""
             )
         return self._request_futures_api(
             "delete", "batchOrders", True, force_params=True, data=params
@@ -8454,11 +8453,11 @@ class Client(BaseClient):
         """
         if params.get("orderidlist"):
             params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
+                convert_list_to_json_array(params["orderidlist"]) or ""
             )
         if params.get("origclientOrderidlist"):
             params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+                convert_list_to_json_array(params["origclientorderidlist"]) or ""
             )
         return self._request_futures_coin_api(
             "delete", "batchOrders", True, data=params
