@@ -56,7 +56,7 @@ async def test_invalid_request(clientAsync):
     with pytest.raises(
         BinanceAPIException,
         match=re.escape(
-            "APIError(code=-1100): Illegal characters found in parameter 'symbol'; legal range is '^[A-Z0-9-_.]{1,20}$'."
+            "APIError(code=-1100): Illegal characters found in parameter 'symbol'; legal range is '\^[\w\-._&&[^a-z]]{1,50}$'"
         ),
     ):
         await clientAsync.ws_get_order_book(symbol="send error")

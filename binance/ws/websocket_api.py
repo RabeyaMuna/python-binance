@@ -19,7 +19,6 @@ class WebsocketAPI(ReconnectingWebsocket):
     @property
     def connection_lock(self) -> asyncio.Lock:
         if self._connection_lock is None:
-            loop = asyncio.get_event_loop()
             self._connection_lock = asyncio.Lock()
         return self._connection_lock
 
@@ -35,7 +34,7 @@ class WebsocketAPI(ReconnectingWebsocket):
         if "status" in parsed_msg:
             if parsed_msg["status"] != 200:
                 exception = BinanceAPIException(
-                    parsed_msg, parsed_msg["status"], self.json_dumps(parsed_msg["error"])
+                    parsed_msg, parsed_msg["status"], parsed_msg.get("error") or parsed_msg.get("message")
                 )
         if req_id is not None and req_id in self._responses:
             if exception is not None:
@@ -98,7 +97,7 @@ class WebsocketAPI(ReconnectingWebsocket):
         await self._ensure_ws_connection()
 
         # Create future for response
-        future = asyncio.Future()
+        future = asyncio.get_running_loop().create_future()
         self._responses[id] = future
 
         try:
