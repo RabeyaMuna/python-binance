@@ -396,6 +396,8 @@ class AsyncClient(BaseClient):
                 # or equal than an hour and the result set should contain at
                 # least one trade.
                 start_ts = convert_ts_str(start_str)
+                if start_ts is None:
+                    return
                 # If the resulting set is empty (i.e. no trades in that interval)
                 # then we just move forward hour by hour until we find at least one
                 # trade or reach present moment
@@ -2006,11 +2008,11 @@ class AsyncClient(BaseClient):
     async def futures_cancel_orders(self, **params):
         if params.get("orderidlist"):
             params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
+                convert_list_to_json_array(params["orderidlist"]).encode()
             )
         if params.get("origclientorderidlist"):
             params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+                convert_list_to_json_array(params["origclientorderidlist"]).encode()
             )
         return await self._request_futures_api(
             "delete", "batchOrders", True, data=params, force_params=True
@@ -2267,11 +2269,11 @@ class AsyncClient(BaseClient):
     async def futures_coin_cancel_orders(self, **params):
         if params.get("orderidlist"):
             params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
+                convert_list_to_json_array(params["orderidlist"]).encode()
             )
         if params.get("origclientorderidlist"):
             params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+                convert_list_to_json_array(params["origclientorderidlist"]).encode()
             )
         return await self._request_futures_coin_api(
             "delete", "batchOrders", True, data=params

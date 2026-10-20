@@ -630,6 +630,8 @@ class Client(BaseClient):
                 # or equal than an hour and the result set should contain at
                 # least one trade.
                 start_ts = convert_ts_str(start_str)
+                if start_ts is None:
+                    raise ValueError("start_str must be a valid timestamp or date string")
                 # If the resulting set is empty (i.e. no trades in that interval)
                 # then we just move forward hour by hour until we find at least one
                 # trade or reach present moment
@@ -7933,13 +7935,15 @@ class Client(BaseClient):
         https://developers.binance.com/docs/derivatives/usds-margined-futures/trade/rest-api/Cancel-Multiple-Orders
 
         """
-        if params.get("orderidlist"):
+        orderidlist = params.get("orderidlist")
+        if orderidlist is not None:
             params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
+                convert_list_to_json_array(orderidlist)
             )
-        if params.get("origclientorderidlist"):
+        origclientorderidlist = params.get("origclientorderidlist")
+        if origclientorderidlist is not None:
             params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+                convert_list_to_json_array(origclientorderidlist)
             )
         return self._request_futures_api(
             "delete", "batchOrders", True, force_params=True, data=params
@@ -8452,13 +8456,15 @@ class Client(BaseClient):
         https://developers.binance.com/docs/derivatives/coin-margined-futures/trade/rest-api/Cancel-Multiple-Orders
 
         """
-        if params.get("orderidlist"):
+        orderidlist = params.get("orderidlist")
+        if orderidlist is not None:
             params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
+                convert_list_to_json_array(orderidlist)
             )
-        if params.get("origclientOrderidlist"):
+        origclientorderidlist = params.get("origclientOrderidlist")
+        if origclientorderidlist is not None:
             params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+                convert_list_to_json_array(origclientorderidlist)
             )
         return self._request_futures_coin_api(
             "delete", "batchOrders", True, data=params
