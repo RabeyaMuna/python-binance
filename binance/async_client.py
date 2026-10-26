@@ -400,6 +400,7 @@ class AsyncClient(BaseClient):
                 # then we just move forward hour by hour until we find at least one
                 # trade or reach present moment
                 while True:
+                    assert start_ts is not None
                     end_ts = start_ts + (60 * 60 * 1000)
                     trades = await self.get_aggregate_trades(
                         symbol=symbol, startTime=start_ts, endTime=end_ts
@@ -2005,13 +2006,15 @@ class AsyncClient(BaseClient):
 
     async def futures_cancel_orders(self, **params):
         if params.get("orderidlist"):
-            params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
-            )
+            order_ids = convert_list_to_json_array(params["orderidlist"])
+            assert order_ids is not None
+            params["orderidlist"] = quote(order_ids)
         if params.get("origclientorderidlist"):
-            params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+            client_order_ids = convert_list_to_json_array(
+                params["origclientorderidlist"]
             )
+            assert client_order_ids is not None
+            params["origclientorderidlist"] = quote(client_order_ids)
         return await self._request_futures_api(
             "delete", "batchOrders", True, data=params, force_params=True
         )
@@ -2266,13 +2269,15 @@ class AsyncClient(BaseClient):
 
     async def futures_coin_cancel_orders(self, **params):
         if params.get("orderidlist"):
-            params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
-            )
+            order_ids = convert_list_to_json_array(params["orderidlist"])
+            assert order_ids is not None
+            params["orderidlist"] = quote(order_ids)
         if params.get("origclientorderidlist"):
-            params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+            client_order_ids = convert_list_to_json_array(
+                params["origclientorderidlist"]
             )
+            assert client_order_ids is not None
+            params["origclientorderidlist"] = quote(client_order_ids)
         return await self._request_futures_coin_api(
             "delete", "batchOrders", True, data=params
         )

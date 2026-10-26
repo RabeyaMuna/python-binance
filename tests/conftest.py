@@ -11,7 +11,6 @@ from binance.ws.streams import ThreadedWebsocketManager
 proxies = {}
 proxy = os.getenv("PROXY")
 
-proxy = "http://188.245.226.105:8911"
 if proxy:
     proxies = {"http": proxy, "https": proxy}  # tmp: improve this in the future
 else:
@@ -21,13 +20,14 @@ api_key = os.getenv("TEST_API_KEY")
 api_secret = os.getenv("TEST_API_SECRET")
 futures_api_key = os.getenv("TEST_FUTURES_API_KEY")
 futures_api_secret = os.getenv("TEST_FUTURES_API_SECRET")
+spot_credentials_configured = bool(api_key and api_secret)
+futures_credentials_configured = bool(futures_api_key and futures_api_secret)
+api_key = api_key or "test_key"
+api_secret = api_secret or "test_secret"
+futures_api_key = futures_api_key or "test_key"
+futures_api_secret = futures_api_secret or "test_secret"
 testnet = os.getenv("TEST_TESTNET", "true").lower() == "true"
-api_key = "u4L8MG2DbshTfTzkx2Xm7NfsHHigvafxeC29HrExEmah1P8JhxXkoOu6KntLICUc"
-api_secret = "hBZEqhZUUS6YZkk7AIckjJ3iLjrgEFr5CRtFPp5gjzkrHKKC9DAv4OH25PlT6yq5"
-testnet = True # only for spot now
-demo = True # spot and swap
-futures_api_key = "HjhMFvuF1veWQVdUbLIy7TiCYe9fj4W6sEukmddD8TM9kPVRHMK6nS2SdV5mwE5u"
-futures_api_secret = "Suu9pWcO9zbvVuc6cSQsVuiiw2DmmA8DgHrUfePF9s2RtaHa0zxK3eAF4MfIk7Pd"
+demo = True  # spot and swap
 
 
 # Configure logging for all tests
@@ -121,10 +121,16 @@ def event_loop():
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--run-spot", action="store_true", default=True, help="Run margin tests"
+        "--run-spot",
+        action="store_true",
+        default=spot_credentials_configured,
+        help="Run spot integration tests",
     )
     parser.addoption(
-        "--run-futures", action="store_true", default=True, help="Run margin tests"
+        "--run-futures",
+        action="store_true",
+        default=futures_credentials_configured,
+        help="Run futures integration tests",
     )
     parser.addoption(
         "--run-margin", action="store_true", default=False, help="Run margin tests"
