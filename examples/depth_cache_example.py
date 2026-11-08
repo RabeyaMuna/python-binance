@@ -8,8 +8,9 @@ sys.path.append(root)
 
 import asyncio
 import logging
+
 from binance import AsyncClient
-from binance.ws.depthcache import DepthCacheManager 
+from binance.ws.depthcache import DepthCacheManager
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)

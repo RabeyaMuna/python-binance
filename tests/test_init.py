@@ -1,16 +1,17 @@
 from binance import (
     AsyncClient,
+    BinanceSocketManager,
+    BinanceSocketType,
     Client,
     DepthCacheManager,
-    OptionsDepthCacheManager,
-    ThreadedDepthCacheManager,
     FuturesDepthCacheManager,
-    BinanceSocketManager,
-    ThreadedWebsocketManager,
-    BinanceSocketType,
     KeepAliveWebsocket,
-    ReconnectingWebsocket
+    OptionsDepthCacheManager,
+    ReconnectingWebsocket,
+    ThreadedDepthCacheManager,
+    ThreadedWebsocketManager,
 )
+
 
 def test_version():
     """Test that __version__ is defined"""

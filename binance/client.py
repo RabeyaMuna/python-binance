@@ -1,39 +1,38 @@
+import time
 from pathlib import Path
-from typing import Dict, Optional, List, Union, Any
+from typing import Any
+from urllib.parse import quote, urlencode
 
 import requests
-import time
-from urllib.parse import urlencode, quote
 
 from .base_client import BaseClient
-
-from .helpers import (
-    convert_list_to_json_array,
-    interval_to_milliseconds,
-    convert_ts_str,
-)
+from .enums import HistoricalKlinesType
 from .exceptions import (
     BinanceAPIException,
     BinanceRequestException,
     NotImplementedException,
 )
-from .enums import HistoricalKlinesType
+from .helpers import (
+    convert_list_to_json_array,
+    convert_ts_str,
+    interval_to_milliseconds,
+)
 
 
 class Client(BaseClient):
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
-        requests_params: Optional[Dict[str, Any]] = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        requests_params: dict[str, Any] | None = None,
         tld: str = "com",
         base_endpoint: str = BaseClient.BASE_ENDPOINT_DEFAULT,
         testnet: bool = False,
         demo: bool = False,
-        private_key: Optional[Union[str, Path]] = None,
-        private_key_pass: Optional[str] = None,
-        ping: Optional[bool] = True,
-        time_unit: Optional[str] = None,
+        private_key: str | Path | None = None,
+        private_key_pass: str | None = None,
+        ping: bool | None = True,
+        time_unit: str | None = None,
     ):
         super().__init__(
             api_key,
@@ -120,14 +119,14 @@ class Client(BaseClient):
 
     def _request_futures_api(
         self, method, path, signed=False, version: int = 1, **kwargs
-    ) -> Dict:
+    ) -> dict:
         version = self._get_version(version, **kwargs)
         uri = self._create_futures_api_uri(path, version)
         force_params = kwargs.pop("force_params", False)
 
         return self._request(method, uri, signed, force_params, **kwargs)
 
-    def _request_futures_data_api(self, method, path, signed=False, **kwargs) -> Dict:
+    def _request_futures_data_api(self, method, path, signed=False, **kwargs) -> dict:
         uri = self._create_futures_data_api_uri(path)
 
         force_params = kwargs.pop("force_params", True)
@@ -135,7 +134,7 @@ class Client(BaseClient):
 
     def _request_futures_coin_api(
         self, method, path, signed=False, version=1, **kwargs
-    ) -> Dict:
+    ) -> dict:
         version = self._get_version(version, **kwargs)
         uri = self._create_futures_coin_api_url(path, version=version)
 
@@ -144,14 +143,14 @@ class Client(BaseClient):
 
     def _request_futures_coin_data_api(
         self, method, path, signed=False, version=1, **kwargs
-    ) -> Dict:
+    ) -> dict:
         version = self._get_version(version, **kwargs)
         uri = self._create_futures_coin_data_api_url(path, version=version)
 
         force_params = kwargs.pop("force_params", True)
         return self._request(method, uri, signed, force_params, **kwargs)
 
-    def _request_options_api(self, method, path, signed=False, **kwargs) -> Dict:
+    def _request_options_api(self, method, path, signed=False, **kwargs) -> dict:
         """
         https://developers.binance.com/docs/derivatives/option/market-data
         """
@@ -162,7 +161,7 @@ class Client(BaseClient):
 
     def _request_margin_api(
         self, method, path, signed=False, version=1, **kwargs
-    ) -> Dict:
+    ) -> dict:
         version = self._get_version(version, **kwargs)
         uri = self._create_margin_api_uri(path, version)
 
@@ -171,13 +170,13 @@ class Client(BaseClient):
 
     def _request_papi_api(
         self, method, path, signed=False, version=1, **kwargs
-    ) -> Dict:
+    ) -> dict:
         version = self._get_version(version, **kwargs)
         uri = self._create_papi_api_uri(path, version)
         force_params = kwargs.pop("force_params", False)
         return self._request(method, uri, signed, force_params, **kwargs)
 
-    def _request_website(self, method, path, signed=False, **kwargs) -> Dict:
+    def _request_website(self, method, path, signed=False, **kwargs) -> dict:
         uri = self._create_website_uri(path)
         return self._request(method, uri, signed, **kwargs)
 
@@ -186,22 +185,22 @@ class Client(BaseClient):
 
     def _post(
         self, path, signed=False, version=BaseClient.PUBLIC_API_VERSION, **kwargs
-    ) -> Dict:
+    ) -> dict:
         return self._request_api("post", path, signed, version, **kwargs)
 
     def _put(
         self, path, signed=False, version=BaseClient.PUBLIC_API_VERSION, **kwargs
-    ) -> Dict:
+    ) -> dict:
         return self._request_api("put", path, signed, version, **kwargs)
 
     def _delete(
         self, path, signed=False, version=BaseClient.PUBLIC_API_VERSION, **kwargs
-    ) -> Dict:
+    ) -> dict:
         return self._request_api("delete", path, signed, version, **kwargs)
 
     # Exchange Endpoints
 
-    def get_products(self) -> Dict:
+    def get_products(self) -> dict:
         """Return list of products currently listed on Binance
 
         Use get_exchange_info() call instead
@@ -217,7 +216,7 @@ class Client(BaseClient):
         )
         return products
 
-    def get_exchange_info(self) -> Dict:
+    def get_exchange_info(self) -> dict:
         """Return rate limits and list of symbols
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/general-endpoints#exchange-information
@@ -283,7 +282,7 @@ class Client(BaseClient):
 
         return self._get("exchangeInfo")
 
-    def get_symbol_info(self, symbol) -> Optional[Dict]:
+    def get_symbol_info(self, symbol) -> dict | None:
         """Return information about a symbol
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/general-endpoints#exchange-information
@@ -336,7 +335,7 @@ class Client(BaseClient):
 
     # General Endpoints
 
-    def ping(self) -> Dict:
+    def ping(self) -> dict:
         """Test connectivity to the Rest API.
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/general-endpoints#test-connectivity
@@ -352,7 +351,7 @@ class Client(BaseClient):
         """
         return self._get("ping")
 
-    def get_server_time(self) -> Dict:
+    def get_server_time(self) -> dict:
         """Test connectivity to the Rest API and get the current server time.
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/general-endpoints#check-server-time
@@ -372,7 +371,7 @@ class Client(BaseClient):
 
     # Market Data Endpoints
 
-    def get_all_tickers(self) -> List[Dict[str, str]]:
+    def get_all_tickers(self) -> list[dict[str, str]]:
         """Latest price for all symbols.
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints#symbol-price-ticker
@@ -400,7 +399,7 @@ class Client(BaseClient):
             return response
         raise TypeError("Expected a list of dictionaries")
 
-    def get_orderbook_tickers(self, **params) -> Dict:
+    def get_orderbook_tickers(self, **params) -> dict:
         """Best price/qty on the order book for all symbols.
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints#symbol-order-book-ticker
@@ -443,7 +442,7 @@ class Client(BaseClient):
             "ticker/bookTicker", data=data
         )
 
-    def get_order_book(self, **params) -> Dict:
+    def get_order_book(self, **params) -> dict:
         """Get the Order Book for the market
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints#order-book
@@ -480,7 +479,7 @@ class Client(BaseClient):
         """
         return self._get("depth", data=params)
 
-    def get_recent_trades(self, **params) -> Dict:
+    def get_recent_trades(self, **params) -> dict:
         """Get recent trades (up to last 500).
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints#recent-trades-list
@@ -510,7 +509,7 @@ class Client(BaseClient):
         """
         return self._get("trades", data=params)
 
-    def get_historical_trades(self, **params) -> Dict:
+    def get_historical_trades(self, **params) -> dict:
         """Get older trades.
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints#old-trade-lookup
@@ -544,7 +543,7 @@ class Client(BaseClient):
             "historicalTrades", data=params
         )
 
-    def get_aggregate_trades(self, **params) -> Dict:
+    def get_aggregate_trades(self, **params) -> dict:
         """Get compressed, aggregate trades. Trades that fill at the time,
         from the same order, with the same price will have the quantity aggregated.
 
@@ -634,6 +633,7 @@ class Client(BaseClient):
                 # then we just move forward hour by hour until we find at least one
                 # trade or reach present moment
                 while True:
+                    assert start_ts is not None
                     end_ts = start_ts + (60 * 60 * 1000)
                     trades = self.get_aggregate_trades(
                         symbol=symbol, startTime=start_ts, endTime=end_ts
@@ -666,7 +666,7 @@ class Client(BaseClient):
                 yield t
             last_id = trades[-1][self.AGG_ID]
 
-    def get_ui_klines(self, **params) -> Dict:
+    def get_ui_klines(self, **params) -> dict:
         """Kline/candlestick bars for a symbol with UI enhancements. Klines are uniquely identified by their open time.
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints#uiklines
@@ -708,7 +708,7 @@ class Client(BaseClient):
         """
         return self._get("uiKlines", data=params)
 
-    def get_klines(self, **params) -> Dict:
+    def get_klines(self, **params) -> dict:
         """Kline/candlestick bars for a symbol. Klines are uniquely identified by their open time.
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints#klinecandlestick-data
@@ -752,7 +752,7 @@ class Client(BaseClient):
 
     def _klines(
         self, klines_type: HistoricalKlinesType = HistoricalKlinesType.SPOT, **params
-    ) -> Dict:
+    ) -> dict:
         """Get klines of spot (get_klines) or futures (futures_klines) endpoints.
 
         https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints#klinecandlestick-data
@@ -3155,7 +3155,7 @@ class Client(BaseClient):
 
         raise Exception("There is no entry with withdraw id", result)
 
-    def get_deposit_address(self, coin: str, network: Optional[str] = None, **params):
+    def get_deposit_address(self, coin: str, network: str | None = None, **params):
         """Fetch a deposit address for a symbol
 
         https://developers.binance.com/docs/wallet/capital/deposite-address
@@ -7934,13 +7934,15 @@ class Client(BaseClient):
 
         """
         if params.get("orderidlist"):
-            params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
-            )
+            order_ids = convert_list_to_json_array(params["orderidlist"])
+            assert order_ids is not None
+            params["orderidlist"] = quote(order_ids)
         if params.get("origclientorderidlist"):
-            params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+            client_order_ids = convert_list_to_json_array(
+                params["origclientorderidlist"]
             )
+            assert client_order_ids is not None
+            params["origclientorderidlist"] = quote(client_order_ids)
         return self._request_futures_api(
             "delete", "batchOrders", True, force_params=True, data=params
         )
@@ -8453,13 +8455,15 @@ class Client(BaseClient):
 
         """
         if params.get("orderidlist"):
-            params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
-            )
+            order_ids = convert_list_to_json_array(params["orderidlist"])
+            assert order_ids is not None
+            params["orderidlist"] = quote(order_ids)
         if params.get("origclientOrderidlist"):
-            params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+            client_order_ids = convert_list_to_json_array(
+                params["origclientorderidlist"]
             )
+            assert client_order_ids is not None
+            params["origclientorderidlist"] = quote(client_order_ids)
         return self._request_futures_coin_api(
             "delete", "batchOrders", True, data=params
         )

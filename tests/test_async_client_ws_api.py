@@ -1,5 +1,7 @@
-import pytest
 import sys
+
+import pytest
+
 pytestmark = [pytest.mark.skipif(sys.version_info < (3, 8), reason="websockets_proxy Python 3.8+"), pytest.mark.asyncio()]
 
 async def test_ws_get_order_book(clientAsync):

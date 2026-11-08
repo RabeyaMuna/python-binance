@@ -1,19 +1,19 @@
-from typing import Dict, Optional
 import asyncio
 
 from websockets import WebSocketClientProtocol  # type: ignore
 
+from binance.exceptions import BinanceAPIException, BinanceWebsocketUnableToConnect
+
 from .constants import WSListenerState
 from .reconnecting_websocket import ReconnectingWebsocket
-from binance.exceptions import BinanceAPIException, BinanceWebsocketUnableToConnect
 
 
 class WebsocketAPI(ReconnectingWebsocket):
-    def __init__(self, url: str, tld: str = "com", testnet: bool = False, https_proxy: Optional[str] = None):
+    def __init__(self, url: str, tld: str = "com", testnet: bool = False, https_proxy: str | None = None):
         self._tld = tld
         self._testnet = testnet
-        self._responses: Dict[str, asyncio.Future] = {}
-        self._connection_lock: Optional[asyncio.Lock] = None
+        self._responses: dict[str, asyncio.Future] = {}
+        self._connection_lock: asyncio.Lock | None = None
         super().__init__(url=url, prefix="", path="", is_binary=False, https_proxy=https_proxy)
 
     @property
@@ -28,15 +28,14 @@ class WebsocketAPI(ReconnectingWebsocket):
         parsed_msg = super()._handle_message(msg)
         self._log.debug(f"Received message: {parsed_msg}")
         if parsed_msg is None:
-            return None
+            return
         req_id, exception = None, None
         if "id" in parsed_msg:
             req_id = parsed_msg["id"]
-        if "status" in parsed_msg:
-            if parsed_msg["status"] != 200:
-                exception = BinanceAPIException(
-                    parsed_msg, parsed_msg["status"], self.json_dumps(parsed_msg["error"])
-                )
+        if "status" in parsed_msg and parsed_msg["status"] != 200:
+            exception = BinanceAPIException(
+                parsed_msg, parsed_msg["status"], self.json_dumps(parsed_msg["error"])
+            )
         if req_id is not None and req_id in self._responses:
             if exception is not None:
                 self._responses[req_id].set_exception(exception)
@@ -91,7 +90,7 @@ class WebsocketAPI(ReconnectingWebsocket):
 
             except Exception as e:
                 self._log.error(f"Error ensuring WebSocket connection: {e}")
-                raise BinanceWebsocketUnableToConnect(f"Connection failed: {str(e)}")
+                raise BinanceWebsocketUnableToConnect(f"Connection failed: {e!s}")
 
     async def request(self, id: str, payload: dict) -> dict:
         """Send request and wait for response"""

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import threading
-from typing import Optional, Dict, Any
+from typing import Any
 
 from binance.async_client import AsyncClient
 from binance.helpers import get_loop
@@ -10,21 +10,21 @@ from binance.helpers import get_loop
 class ThreadedApiManager(threading.Thread):
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
-        requests_params: Optional[Dict[str, Any]] = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        requests_params: dict[str, Any] | None = None,
         tld: str = "com",
         testnet: bool = False,
-        session_params: Optional[Dict[str, Any]] = None,
-        https_proxy: Optional[str] = None,
-        _loop: Optional[asyncio.AbstractEventLoop] = None,
+        session_params: dict[str, Any] | None = None,
+        https_proxy: str | None = None,
+        _loop: asyncio.AbstractEventLoop | None = None,
     ):
         """Initialise the BinanceSocketManager"""
         super().__init__()
         self._loop: asyncio.AbstractEventLoop = get_loop() if _loop is None else _loop
-        self._client: Optional[AsyncClient] = None
+        self._client: AsyncClient | None = None
         self._running: bool = True
-        self._socket_running: Dict[str, bool] = {}
+        self._socket_running: dict[str, bool] = {}
         self._log = logging.getLogger(__name__)
         self._client_params = {
             "api_key": api_key,
@@ -57,7 +57,6 @@ class ThreadedApiManager(threading.Thread):
                 try:
                     msg = await asyncio.wait_for(s.recv(), 3)
                 except asyncio.TimeoutError:
-                    ...
                     continue
                 except Exception as e:
                     self._log.error(f"Error receiving message: {e}")

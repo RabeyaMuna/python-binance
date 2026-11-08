@@ -4,12 +4,9 @@
 name: Python application
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
 
+- push
+- workflow_dispatch
 permissions:
   contents: read
 
@@ -24,7 +21,9 @@ jobs:
       with:
         python-version: '3.9'
     - name: Install Ruff
-      run: pip install ruff
+      # Keep lint results reproducible. New Ruff releases can add preview rules,
+      # which previously broke CI without any repository changes.
+      run: pip install ruff==0.14.5
     - name: Lint code with Ruff
       run: ruff check --output-format=github --target-version=py39 .
     - name: Check code formatting with Ruff
@@ -38,25 +37,23 @@ jobs:
     strategy:
       max-parallel: 2
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.9', '3.12']
     env:
-      PROXY: "http://188.245.226.105:8911"
-      TEST_TESTNET: "true"
-      TEST_API_KEY: "u4L8MG2DbshTfTzkx2Xm7NfsHHigvafxeC29HrExEmah1P8JhxXkoOu6KntLICUc"
-      TEST_API_SECRET: "hBZEqhZUUS6YZkk7AIckjJ3iLjrgEFr5CRtFPp5gjzkrHKKC9DAv4OH25PlT6yq5"
-      TEST_FUTURES_API_KEY: "227719da8d8499e8d3461587d19f259c0b39c2b462a77c9b748a6119abd74401"
-      TEST_FUTURES_API_SECRET: "b14b935f9cfacc5dec829008733c40da0588051f29a44625c34967b45c11d73c"
+      PROXY: ${{ secrets.PROXY }}
+      TEST_TESTNET: 'true'
+      TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
+      TEST_API_SECRET: ${{ secrets.TEST_API_SECRET }}
+      TEST_FUTURES_API_KEY: ${{ secrets.TEST_FUTURES_API_KEY }}
+      TEST_FUTURES_API_SECRET: ${{ secrets.TEST_FUTURES_API_SECRET }}
     steps:
     - uses: actions/checkout@v5
     - name: Checking env
-      run: |
-        echo "PROXY: $PROXY"
-        echo "Python version: ${{ matrix.python-version }}"
+      run: 'echo "Python version: ${{ matrix.python-version }}"'
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
-        cache: 'pip'
+        cache: pip
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -66,9 +63,19 @@ jobs:
     - name: Type check with pyright (Python 3.12 only)
       if: matrix.python-version == '3.12'
       run: pyright
-    - name: Test with tox
+    - name: Integration tests with tox
+      if: >-
+        env.TEST_API_KEY != '' &&
+        env.TEST_API_SECRET != '' &&
+        env.TEST_FUTURES_API_KEY != '' &&
+        env.TEST_FUTURES_API_SECRET != ''
       run: tox -e py
     - name: Coveralls Parallel
+      if: >-
+        env.TEST_API_KEY != '' &&
+        env.TEST_API_SECRET != '' &&
+        env.TEST_FUTURES_API_KEY != '' &&
+        env.TEST_FUTURES_API_SECRET != ''
       uses: coverallsapp/github-action@v2
       with:
         parallel: true

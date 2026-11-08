@@ -2,10 +2,9 @@ import asyncio
 import gzip
 import json
 import logging
-from socket import gaierror
-from typing import Optional
 from asyncio import sleep
 from random import random
+from socket import gaierror
 
 # load orjson if available, otherwise default to json
 orjson = None
@@ -23,7 +22,8 @@ except ImportError:
 Proxy = None
 proxy_connect = None
 try:
-    from websockets_proxy import Proxy as w_Proxy, proxy_connect as w_proxy_connect
+    from websockets_proxy import Proxy as w_Proxy
+    from websockets_proxy import proxy_connect as w_proxy_connect
 
     Proxy = w_Proxy
     proxy_connect = w_proxy_connect
@@ -34,8 +34,8 @@ import websockets as ws
 
 from binance.exceptions import (
     BinanceWebsocketClosed,
-    BinanceWebsocketUnableToConnect,
     BinanceWebsocketQueueOverflow,
+    BinanceWebsocketUnableToConnect,
     ReadLoopClosed,
 )
 from binance.helpers import get_loop
@@ -52,11 +52,11 @@ class ReconnectingWebsocket:
     def __init__(
         self,
         url: str,
-        path: Optional[str] = None,
+        path: str | None = None,
         prefix: str = "ws/",
         is_binary: bool = False,
         exit_coro=None,
-        https_proxy: Optional[str] = None,
+        https_proxy: str | None = None,
         max_queue_size: int = 100,
         **kwargs,
     ):
@@ -70,7 +70,7 @@ class ReconnectingWebsocket:
         self._is_binary = is_binary
         self._conn = None
         self._socket = None
-        self.ws: Optional[ws.WebSocketClientProtocol] = None  # type: ignore
+        self.ws: ws.WebSocketClientProtocol | None = None  # type: ignore
         self.ws_state = WSListenerState.INITIALISING
         self._queue = asyncio.Queue()
         self._handle_read_loop = None
@@ -131,7 +131,7 @@ class ReconnectingWebsocket:
 
         try:
             self.ws = await self._conn.__aenter__()
-        except Exception as e:  # noqa
+        except Exception as e:
             self._log.error(f"Failed to connect to websocket: {e}")
             self.ws_state = WSListenerState.RECONNECTING
             raise e

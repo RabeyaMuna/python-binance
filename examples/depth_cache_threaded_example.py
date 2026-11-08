@@ -7,6 +7,7 @@ root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(root)
 
 import logging
+
 from binance.ws.depthcache import ThreadedDepthCacheManager
 
 logging.basicConfig(level=logging.DEBUG)

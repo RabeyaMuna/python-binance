@@ -1,14 +1,16 @@
-import json
-import sys
-import re
-import pytest
 import asyncio
-from binance import AsyncClient
+import json
+import re
+import sys
 
+import pytest
+
+from binance import AsyncClient
 from binance.exceptions import BinanceAPIException, BinanceWebsocketUnableToConnect
 from binance.ws.constants import WSListenerState
-from .test_get_order_book import assert_ob
+
 from .conftest import proxy
+from .test_get_order_book import assert_ob
 
 
 @pytest.mark.skipif(sys.version_info < (3, 8), reason="websockets_proxy Python 3.8+")
@@ -198,7 +200,6 @@ async def test_cleanup_on_exit(clientAsync):
 @pytest.mark.asyncio
 async def test_ws_queue_overflow(clientAsync):
     """WebSocket API should not overflow queue"""
-    #
     original_size = clientAsync.ws_api.max_queue_size
     clientAsync.ws_api.max_queue_size = 1
 

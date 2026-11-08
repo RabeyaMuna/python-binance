@@ -1,14 +1,16 @@
-import sys
-import pytest
+import asyncio
 import gzip
 import json
-from unittest.mock import patch, create_autospec, Mock
-from binance.ws.reconnecting_websocket import ReconnectingWebsocket
-from binance.ws.constants import WSListenerState
-from binance.exceptions import BinanceWebsocketUnableToConnect, ReadLoopClosed
+import sys
+from unittest.mock import Mock, create_autospec, patch
+
+import pytest
 from websockets import WebSocketClientProtocol  # type: ignore
 from websockets.protocol import State
-import asyncio
+
+from binance.exceptions import BinanceWebsocketUnableToConnect, ReadLoopClosed
+from binance.ws.constants import WSListenerState
+from binance.ws.reconnecting_websocket import ReconnectingWebsocket
 
 try:
     from unittest.mock import AsyncMock  # Python 3.8+

@@ -1,7 +1,8 @@
+import os
 import re
+
 import requests
 from bs4 import BeautifulSoup
-import os
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
@@ -115,7 +116,7 @@ def fetch_endpoints():
     # Filter endpoints that don't start with any known prefix
     valid_endpoints = {
         (method, endpoint) for method, endpoint in endpoints 
-        if any(endpoint.startswith(prefix) for prefix in PREFIX_MAP.keys())
+        if any(endpoint.startswith(prefix) for prefix in PREFIX_MAP)
     }
     
     filtered_count = len(endpoints) - len(valid_endpoints)

@@ -1,8 +1,9 @@
 from datetime import datetime
 
 import pytest
-from .test_order import assert_contract_order
+
 from .test_get_order_book import assert_ob
+from .test_order import assert_contract_order
 
 pytestmark = [pytest.mark.futures, pytest.mark.asyncio]
 

@@ -1,6 +1,8 @@
-import sys
-import pytest
 import logging
+import sys
+
+import pytest
+
 from binance import BinanceSocketManager
 
 pytestmark = [

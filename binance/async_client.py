@@ -1,8 +1,9 @@
 import asyncio
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
-from urllib.parse import urlencode, quote
 import time
+from pathlib import Path
+from typing import Any
+from urllib.parse import quote, urlencode
+
 import aiohttp
 import yarl
 
@@ -18,6 +19,7 @@ from binance.helpers import (
     get_loop,
     interval_to_milliseconds,
 )
+
 from .base_client import BaseClient
 from .client import Client
 
@@ -25,23 +27,23 @@ from .client import Client
 class AsyncClient(BaseClient):
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
-        requests_params: Optional[Dict[str, Any]] = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        requests_params: dict[str, Any] | None = None,
         tld: str = "com",
         base_endpoint: str = BaseClient.BASE_ENDPOINT_DEFAULT,
         testnet: bool = False,
         demo: bool = False,
         loop=None,
-        session_params: Optional[Dict[str, Any]] = None,
-        private_key: Optional[Union[str, Path]] = None,
-        private_key_pass: Optional[str] = None,
-        https_proxy: Optional[str] = None,
-        time_unit: Optional[str] = None,
+        session_params: dict[str, Any] | None = None,
+        private_key: str | Path | None = None,
+        private_key_pass: str | None = None,
+        https_proxy: str | None = None,
+        time_unit: str | None = None,
     ):
         self.https_proxy = https_proxy
         self.loop = loop or get_loop()
-        self._session_params: Dict[str, Any] = session_params or {}
+        self._session_params: dict[str, Any] = session_params or {}
         
         # Convert https_proxy to requests_params format for BaseClient
         if https_proxy and requests_params is None:
@@ -67,19 +69,19 @@ class AsyncClient(BaseClient):
     @classmethod
     async def create(
         cls,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
-        requests_params: Optional[Dict[str, Any]] = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        requests_params: dict[str, Any] | None = None,
         tld: str = "com",
         base_endpoint: str = BaseClient.BASE_ENDPOINT_DEFAULT,
         testnet: bool = False,
         demo: bool = False,
         loop=None,
-        session_params: Optional[Dict[str, Any]] = None,
-        private_key: Optional[Union[str, Path]] = None,
-        private_key_pass: Optional[str] = None,
-        https_proxy: Optional[str] = None,
-        time_unit: Optional[str] = None,
+        session_params: dict[str, Any] | None = None,
+        private_key: str | Path | None = None,
+        private_key_pass: str | None = None,
+        https_proxy: str | None = None,
+        time_unit: str | None = None,
     ):
         self = cls(
             api_key,
@@ -209,7 +211,7 @@ class AsyncClient(BaseClient):
 
     async def _request_futures_api(
         self, method, path, signed=False, version=1, **kwargs
-    ) -> Dict:
+    ) -> dict:
         version = self._get_version(version, **kwargs)
         uri = self._create_futures_api_uri(path, version=version)
         force_params = kwargs.pop("force_params", False)
@@ -217,14 +219,14 @@ class AsyncClient(BaseClient):
 
     async def _request_futures_data_api(
         self, method, path, signed=False, **kwargs
-    ) -> Dict:
+    ) -> dict:
         uri = self._create_futures_data_api_uri(path)
         force_params = kwargs.pop("force_params", True)
         return await self._request(method, uri, signed, force_params, **kwargs)
 
     async def _request_futures_coin_api(
         self, method, path, signed=False, version=1, **kwargs
-    ) -> Dict:
+    ) -> dict:
         version = self._get_version(version, **kwargs)
         uri = self._create_futures_coin_api_url(path, version=version)
         force_params = kwargs.pop("force_params", False)
@@ -232,14 +234,14 @@ class AsyncClient(BaseClient):
 
     async def _request_futures_coin_data_api(
         self, method, path, signed=False, version=1, **kwargs
-    ) -> Dict:
+    ) -> dict:
         version = self._get_version(version, **kwargs)
         uri = self._create_futures_coin_data_api_url(path, version=version)
 
         force_params = kwargs.pop("force_params", True)
         return await self._request(method, uri, signed, force_params, **kwargs)
 
-    async def _request_options_api(self, method, path, signed=False, **kwargs) -> Dict:
+    async def _request_options_api(self, method, path, signed=False, **kwargs) -> dict:
         uri = self._create_options_api_uri(path)
         force_params = kwargs.pop("force_params", True)
 
@@ -247,7 +249,7 @@ class AsyncClient(BaseClient):
 
     async def _request_margin_api(
         self, method, path, signed=False, version=1, **kwargs
-    ) -> Dict:
+    ) -> dict:
         version = self._get_version(version, **kwargs)
         uri = self._create_margin_api_uri(path, version)
 
@@ -256,14 +258,14 @@ class AsyncClient(BaseClient):
 
     async def _request_papi_api(
         self, method, path, signed=False, version=1, **kwargs
-    ) -> Dict:
+    ) -> dict:
         version = self._get_version(version, **kwargs)
         uri = self._create_papi_api_uri(path, version)
 
         force_params = kwargs.pop("force_params", False)
         return await self._request(method, uri, signed, force_params, **kwargs)
 
-    async def _request_website(self, method, path, signed=False, **kwargs) -> Dict:
+    async def _request_website(self, method, path, signed=False, **kwargs) -> dict:
         uri = self._create_website_uri(path)
         return await self._request(method, uri, signed, **kwargs)
 
@@ -274,22 +276,22 @@ class AsyncClient(BaseClient):
 
     async def _post(
         self, path, signed=False, version=BaseClient.PUBLIC_API_VERSION, **kwargs
-    ) -> Dict:
+    ) -> dict:
         return await self._request_api("post", path, signed, version, **kwargs)
 
     async def _put(
         self, path, signed=False, version=BaseClient.PUBLIC_API_VERSION, **kwargs
-    ) -> Dict:
+    ) -> dict:
         return await self._request_api("put", path, signed, version, **kwargs)
 
     async def _delete(
         self, path, signed=False, version=BaseClient.PUBLIC_API_VERSION, **kwargs
-    ) -> Dict:
+    ) -> dict:
         return await self._request_api("delete", path, signed, version, **kwargs)
 
     # Exchange Endpoints
 
-    async def get_products(self) -> Dict:
+    async def get_products(self) -> dict:
         products = await self._request_website(
             "get",
             "bapi/asset/v2/public/asset-service/product/get-products?includeEtf=true",
@@ -298,12 +300,12 @@ class AsyncClient(BaseClient):
 
     get_products.__doc__ = Client.get_products.__doc__
 
-    async def get_exchange_info(self) -> Dict:
+    async def get_exchange_info(self) -> dict:
         return await self._get("exchangeInfo")
 
     get_exchange_info.__doc__ = Client.get_exchange_info.__doc__
 
-    async def get_symbol_info(self, symbol) -> Optional[Dict]:
+    async def get_symbol_info(self, symbol) -> dict | None:
         res = await self.get_exchange_info()
 
         for item in res["symbols"]:
@@ -316,12 +318,12 @@ class AsyncClient(BaseClient):
 
     # General Endpoints
 
-    async def ping(self) -> Dict:
+    async def ping(self) -> dict:
         return await self._get("ping")
 
     ping.__doc__ = Client.ping.__doc__
 
-    async def get_server_time(self) -> Dict:
+    async def get_server_time(self) -> dict:
         return await self._get("time")
 
     get_server_time.__doc__ = Client.get_server_time.__doc__
@@ -329,8 +331,8 @@ class AsyncClient(BaseClient):
     # Market Data Endpoints
 
     async def get_all_tickers(
-        self, symbol: Optional[str] = None
-    ) -> List[Dict[str, str]]:
+        self, symbol: str | None = None
+    ) -> list[dict[str, str]]:
         params = {}
         if symbol:
             params["symbol"] = symbol
@@ -343,7 +345,7 @@ class AsyncClient(BaseClient):
 
     get_all_tickers.__doc__ = Client.get_all_tickers.__doc__
 
-    async def get_orderbook_tickers(self, **params) -> Dict:
+    async def get_orderbook_tickers(self, **params) -> dict:
         data = {}
         if "symbol" in params:
             data["symbol"] = params["symbol"]
@@ -355,24 +357,24 @@ class AsyncClient(BaseClient):
 
     get_orderbook_tickers.__doc__ = Client.get_orderbook_tickers.__doc__
 
-    async def get_order_book(self, **params) -> Dict:
+    async def get_order_book(self, **params) -> dict:
         return await self._get("depth", data=params)
 
     get_order_book.__doc__ = Client.get_order_book.__doc__
 
-    async def get_recent_trades(self, **params) -> Dict:
+    async def get_recent_trades(self, **params) -> dict:
         return await self._get("trades", data=params)
 
     get_recent_trades.__doc__ = Client.get_recent_trades.__doc__
 
-    async def get_historical_trades(self, **params) -> Dict:
+    async def get_historical_trades(self, **params) -> dict:
         return await self._get(
             "historicalTrades", data=params
         )
 
     get_historical_trades.__doc__ = Client.get_historical_trades.__doc__
 
-    async def get_aggregate_trades(self, **params) -> Dict:
+    async def get_aggregate_trades(self, **params) -> dict:
         return await self._get(
             "aggTrades", data=params
         )
@@ -400,6 +402,7 @@ class AsyncClient(BaseClient):
                 # then we just move forward hour by hour until we find at least one
                 # trade or reach present moment
                 while True:
+                    assert start_ts is not None
                     end_ts = start_ts + (60 * 60 * 1000)
                     trades = await self.get_aggregate_trades(
                         symbol=symbol, startTime=start_ts, endTime=end_ts
@@ -434,19 +437,19 @@ class AsyncClient(BaseClient):
 
     aggregate_trade_iter.__doc__ = Client.aggregate_trade_iter.__doc__
 
-    async def get_ui_klines(self, **params) -> Dict:
+    async def get_ui_klines(self, **params) -> dict:
         return await self._get("uiKlines", data=params)
 
     get_ui_klines.__doc__ = Client.get_ui_klines.__doc__
 
-    async def get_klines(self, **params) -> Dict:
+    async def get_klines(self, **params) -> dict:
         return await self._get("klines", data=params)
 
     get_klines.__doc__ = Client.get_klines.__doc__
 
     async def _klines(
         self, klines_type: HistoricalKlinesType = HistoricalKlinesType.SPOT, **params
-    ) -> Dict:
+    ) -> dict:
         if "endTime" in params and not params["endTime"]:
             del params["endTime"]
         if HistoricalKlinesType.SPOT == klines_type:
@@ -962,7 +965,7 @@ class AsyncClient(BaseClient):
     get_withdraw_history_id.__doc__ = Client.get_withdraw_history_id.__doc__
 
     async def get_deposit_address(
-        self, coin: str, network: Optional[str] = None, **params
+        self, coin: str, network: str | None = None, **params
     ):
         params["coin"] = coin
         if network:
@@ -2005,13 +2008,15 @@ class AsyncClient(BaseClient):
 
     async def futures_cancel_orders(self, **params):
         if params.get("orderidlist"):
-            params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
-            )
+            order_ids = convert_list_to_json_array(params["orderidlist"])
+            assert order_ids is not None
+            params["orderidlist"] = quote(order_ids)
         if params.get("origclientorderidlist"):
-            params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+            client_order_ids = convert_list_to_json_array(
+                params["origclientorderidlist"]
             )
+            assert client_order_ids is not None
+            params["origclientorderidlist"] = quote(client_order_ids)
         return await self._request_futures_api(
             "delete", "batchOrders", True, data=params, force_params=True
         )
@@ -2266,13 +2271,15 @@ class AsyncClient(BaseClient):
 
     async def futures_coin_cancel_orders(self, **params):
         if params.get("orderidlist"):
-            params["orderidlist"] = quote(
-                convert_list_to_json_array(params["orderidlist"])
-            )
+            order_ids = convert_list_to_json_array(params["orderidlist"])
+            assert order_ids is not None
+            params["orderidlist"] = quote(order_ids)
         if params.get("origclientorderidlist"):
-            params["origclientorderidlist"] = quote(
-                convert_list_to_json_array(params["origclientorderidlist"])
+            client_order_ids = convert_list_to_json_array(
+                params["origclientorderidlist"]
             )
+            assert client_order_ids is not None
+            params["origclientorderidlist"] = quote(client_order_ids)
         return await self._request_futures_coin_api(
             "delete", "batchOrders", True, data=params
         )

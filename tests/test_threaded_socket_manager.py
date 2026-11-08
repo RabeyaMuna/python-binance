@@ -1,11 +1,14 @@
+import asyncio
+import logging
+import sys
+import time
+
+import pytest
+
 from binance import ThreadedWebsocketManager
 from binance.client import Client
-import asyncio
-import time
-from .conftest import proxies, api_key, api_secret, proxy
-import pytest
-import sys
-import logging
+
+from .conftest import api_key, api_secret, proxies, proxy
 
 pytestmark = pytest.mark.skipif(
     sys.version_info <= (3, 8),

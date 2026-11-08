@@ -1,10 +1,11 @@
-from datetime import datetime
 import re
+from datetime import datetime
 
 import pytest
 import requests_mock
-from .test_order import assert_contract_order
+
 from .test_get_order_book import assert_ob
+from .test_order import assert_contract_order
 
 
 def test_futures_ping(futuresClient):

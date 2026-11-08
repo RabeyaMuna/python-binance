@@ -9,5 +9,7 @@ requests-mock
 tox
 setuptools
 aioresponses
+# aioresponses 0.7.9 does not support aiohttp 3.13+'s ClientResponse API.
+aiohttp<3.13
 pre-commit
 orjson

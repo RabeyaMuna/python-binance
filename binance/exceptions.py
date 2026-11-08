@@ -1,4 +1,3 @@
-# coding=utf-8
 import json
 
 
@@ -8,9 +7,7 @@ class BinanceAPIException(Exception):
         try:
             json_res = json.loads(text)
         except ValueError:
-            self.message = "Invalid JSON error message from Binance: {}".format(
-                response.text
-            )
+            self.message = f"Invalid JSON error message from Binance: {response.text}"
         else:
             self.code = json_res.get("code")
             self.message = json_res.get("msg")
@@ -75,15 +72,12 @@ class BinanceWebsocketUnableToConnect(Exception):
 
 class BinanceWebsocketQueueOverflow(Exception):
     """Raised when the websocket message queue exceeds its maximum size."""
-    pass
 
 class BinanceWebsocketClosed(Exception):
     """Raised when websocket connection is closed."""
-    pass
 
 class ReadLoopClosed(Exception):
     """Raised when trying to read from read loop but already closed"""
-    pass
 
 class NotImplementedException(Exception):
     def __init__(self, value):

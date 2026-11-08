@@ -1,15 +1,15 @@
-import logging
-from operator import itemgetter
 import asyncio
+import logging
 import time
-from typing import Optional, Dict, Callable
+from collections.abc import Callable
+from operator import itemgetter
 
 from ..helpers import get_loop
 from .streams import BinanceSocketManager
 from .threaded_stream import ThreadedApiManager
 
 
-class DepthCache(object):
+class DepthCache:
     def __init__(self, symbol, conv_type: Callable = float):
         """Initialise the DepthCache
 
@@ -143,7 +143,7 @@ class BaseDepthCacheManager:
         client,
         symbol,
         loop=None,
-        refresh_interval: Optional[int] = DEFAULT_REFRESH,
+        refresh_interval: int | None = DEFAULT_REFRESH,
         bm=None,
         limit=10,
         conv_type=float,
@@ -301,7 +301,7 @@ class DepthCacheManager(BaseDepthCacheManager):
         client,
         symbol,
         loop=None,
-        refresh_interval: Optional[int] = None,
+        refresh_interval: int | None = None,
         bm=None,
         limit=500,
         conv_type=float,
@@ -439,9 +439,9 @@ class OptionsDepthCacheManager(BaseDepthCacheManager):
 class ThreadedDepthCacheManager(ThreadedApiManager):
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
-        requests_params: Optional[Dict[str, str]] = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        requests_params: dict[str, str] | None = None,
         tld: str = "com",
         testnet: bool = False,
     ):

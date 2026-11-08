@@ -1,18 +1,18 @@
-from base64 import b64encode
-from pathlib import Path
-import random
-from typing import Dict, Optional, List, Tuple, Union, Any
-
 import asyncio
 import hashlib
 import hmac
+import random
 import time
-from Crypto.PublicKey import RSA, ECC
-from Crypto.Hash import SHA256
-from Crypto.Signature import pkcs1_15, eddsa
 import urllib.parse as _urlencode
+from base64 import b64encode
 from operator import itemgetter
+from pathlib import Path
+from typing import Any
 from urllib.parse import urlencode
+
+from Crypto.Hash import SHA256
+from Crypto.PublicKey import ECC, RSA
+from Crypto.Signature import eddsa, pkcs1_15
 
 from binance.ws.websocket_api import WebsocketAPI
 
@@ -156,17 +156,17 @@ class BaseClient:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
-        requests_params: Optional[Dict[str, Any]] = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        requests_params: dict[str, Any] | None = None,
         tld: str = "com",
         base_endpoint: str = BASE_ENDPOINT_DEFAULT,
         testnet: bool = False,
         demo: bool = False,
-        private_key: Optional[Union[str, Path]] = None,
-        private_key_pass: Optional[str] = None,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
-        time_unit: Optional[str] = None,
+        private_key: str | Path | None = None,
+        private_key_pass: str | None = None,
+        loop: asyncio.AbstractEventLoop | None = None,
+        time_unit: str | None = None,
     ):
         """Binance API Client constructor
 
@@ -230,11 +230,11 @@ class BaseClient:
         self.ws_future = WebsocketAPI(url=ws_future_url, tld=tld, https_proxy=https_proxy)
         self.loop = loop or get_loop()
 
-    def _get_headers(self) -> Dict:
+    def _get_headers(self) -> dict:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36",  # noqa
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36",
         }
         if self.API_KEY:
             assert self.API_KEY
@@ -249,8 +249,8 @@ class BaseClient:
 
     def _init_private_key(
         self,
-        private_key: Optional[Union[str, Path]],
-        private_key_pass: Optional[str] = None,
+        private_key: str | Path | None,
+        private_key_pass: str | None = None,
     ):
         if not private_key:
             return
@@ -367,7 +367,7 @@ class BaseClient:
         )
         return m.hexdigest()
 
-    def _generate_signature(self, data: Dict, uri_encode=True) -> str:
+    def _generate_signature(self, data: dict, uri_encode=True) -> str:
         sig_func = self._hmac_signature
         if self.PRIVATE_KEY:
             if self._is_rsa:
@@ -386,7 +386,7 @@ class BaseClient:
         params = dict(sorted(params.items()))
         return {**params, "signature": signature_func(params)}
 
-    def _generate_ws_api_signature(self, data: Dict) -> str:
+    def _generate_ws_api_signature(self, data: dict) -> str:
         sig_func = self._hmac_signature
         if self.PRIVATE_KEY:
             if self._is_rsa:
@@ -451,7 +451,7 @@ class BaseClient:
         return format(random.getrandbits(length * 4), "x")
 
     @staticmethod
-    def _order_params(data: Dict) -> List[Tuple[str, str]]:
+    def _order_params(data: dict) -> list[tuple[str, str]]:
         """Convert params to list with signature as last element
 
         :param data:
@@ -474,7 +474,7 @@ class BaseClient:
 
     def _get_request_kwargs(
         self, method, signed: bool, force_params: bool = False, **kwargs
-    ) -> Dict:
+    ) -> dict:
         # set default requests timeout
         kwargs["timeout"] = self.REQUEST_TIMEOUT
 
@@ -519,13 +519,12 @@ class BaseClient:
             del kwargs["data"]
 
         # Temporary fix for Signature issue while using batchOrders in AsyncClient
-        if "params" in kwargs.keys():
-            if (
-                "batchOrders" in kwargs["params"]
-                or "orderidlist" in kwargs["params"]
-                or "origclientorderidlist" in kwargs["params"]
-            ):
-                kwargs["data"] = kwargs["params"]
-                del kwargs["params"]
+        if "params" in kwargs and (
+            "batchOrders" in kwargs["params"]
+            or "orderidlist" in kwargs["params"]
+            or "origclientorderidlist" in kwargs["params"]
+        ):
+            kwargs["data"] = kwargs["params"]
+            del kwargs["params"]
 
         return kwargs

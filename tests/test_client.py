@@ -1,8 +1,17 @@
 import sys
+
 import pytest
+
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
-from .conftest import proxies, api_key, api_secret, testnet, call_method_and_assert_uri_contains
+
+from .conftest import (
+    api_key,
+    api_secret,
+    call_method_and_assert_uri_contains,
+    proxies,
+    testnet,
+)
 
 
 def test_client_initialization(client):

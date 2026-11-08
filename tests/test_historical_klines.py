@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-# coding=utf-8
 
-from binance.client import Client
 import pytest
 import requests_mock
+
+from binance.client import Client
 
 client = Client("api_key", "api_secret", ping=False)
 
@@ -44,7 +44,7 @@ def test_exact_amount():
         "0",
     ]
 
-    for i in range(0, 500):
+    for i in range(500):
         first_res.append(row)
 
     second_res = []
@@ -105,7 +105,7 @@ def test_start_and_end_str():
         "0",
     ]
 
-    for i in range(0, 300):
+    for i in range(300):
         first_res.append(row)
 
     with requests_mock.mock() as m:
@@ -161,7 +161,7 @@ def test_start_and_end_timestamp():
         "0",
     ]
 
-    for i in range(0, 300):
+    for i in range(300):
         first_res.append(row)
 
     with requests_mock.mock() as m:
@@ -217,7 +217,7 @@ def test_historical_kline_generator():
         "0",
     ]
 
-    for i in range(0, 300):
+    for i in range(300):
         first_res.append(row)
 
     with requests_mock.mock() as m:
@@ -318,7 +318,7 @@ def test_start_and_limit():
         "0",
     ]
 
-    for i in range(0, 5):
+    for i in range(5):
         first_res.append(row)
 
     with requests_mock.mock() as m:

@@ -1,12 +1,14 @@
-import pytest
 import sys
 
-from binance.async_client import AsyncClient
-from .conftest import proxy, api_key, api_secret, testnet
-from binance.exceptions import BinanceAPIException, BinanceRequestException
+import pytest
 from aiohttp import ClientResponse, hdrs
 from aiohttp.helpers import TimerNoop
 from yarl import URL
+
+from binance.async_client import AsyncClient
+from binance.exceptions import BinanceAPIException, BinanceRequestException
+
+from .conftest import api_key, api_secret, proxy, testnet
 
 pytestmark = [pytest.mark.asyncio]
 

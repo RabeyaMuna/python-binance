@@ -1,8 +1,9 @@
 #!/usr/bin/env python
-from setuptools import setup, find_packages
 import codecs
 import os
 import re
+
+from setuptools import find_packages, setup
 
 with codecs.open(
     os.path.join(os.path.abspath(os.path.dirname(__file__)), "binance", "__init__.py"),
@@ -10,7 +11,7 @@ with codecs.open(
     "latin1",
 ) as fp:
     try:
-        version = re.findall(r'^__version__ = "([^"]+)"\r?$', fp.read(), re.M)[0]
+        version = re.findall(r'^__version__ = "([^"]+)"\r?$', fp.read(), re.MULTILINE)[0]
     except IndexError:
         raise RuntimeError("Unable to determine version.")
 
