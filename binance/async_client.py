@@ -44,7 +44,7 @@ class AsyncClient(BaseClient):
         self._session_params: Dict[str, Any] = session_params or {}
         
         # Convert https_proxy to requests_params format for BaseClient
-        if https_proxy and requests_params is None:
+        if https_proxy is not None and requests_params is None:
             requests_params = {'proxies': {'http': https_proxy, 'https': https_proxy}}
         elif https_proxy and requests_params is not None:
             if 'proxies' not in requests_params:
@@ -119,10 +119,10 @@ class AsyncClient(BaseClient):
         return session
 
     async def close_connection(self):
-        if self.session:
+        if self.session is not None:
             assert self.session
             await self.session.close()
-        if self.ws_api:
+        if self.ws_api is not None:
             await self.ws_api.close()
             self._ws_api = None
 
@@ -177,12 +177,12 @@ class AsyncClient(BaseClient):
             self.response = response
             return await self._handle_response(response)
 
-    async def _handle_response(self, response: aiohttp.ClientResponse):
+    async def _handle_response(self, response: aiohttp.ClientResponse) -> Union[Dict[str, Any], List[Any]]:
         """Internal helper for handling API responses from the Binance server.
         Raises the appropriate exceptions when necessary; otherwise, returns the
         response.
         """
-        if not str(response.status).startswith("2"):
+        if response.status < 200 or response.status >= 300:
             raise BinanceAPIException(response, response.status, await response.text())
         
         text = await response.text()
@@ -191,9 +191,9 @@ class AsyncClient(BaseClient):
 
         try:
             return await response.json()
-        except ValueError:
+        except (ValueError, aiohttp.ContentTypeError) as e:
             txt = await response.text()
-            raise BinanceRequestException(f"Invalid Response: {txt}")
+            raise BinanceRequestException(f"Invalid Response: {txt}") from e
 
     async def _request_api(
         self,
@@ -331,8 +331,8 @@ class AsyncClient(BaseClient):
     async def get_all_tickers(
         self, symbol: Optional[str] = None
     ) -> List[Dict[str, str]]:
-        params = {}
-        if symbol:
+        params: Dict[str, str] = {}
+        if symbol is not None:
             params["symbol"] = symbol
         response = await self._get(
             "ticker/price", data=params
